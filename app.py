@@ -1,23 +1,17 @@
 # =========================================================
-# SISTEMA LOGÍSTICO CARCASAS - STREAMLIT CLOUD
+# SISTEMA LOGÍSTICO CARCASAS - STREAMLIT CLOUD FINAL
 # =========================================================
 
 import streamlit as st
 import pandas as pd
 import gspread
 
-from oauth2client.service_account import (
-    ServiceAccountCredentials
-)
+from oauth2client.service_account import ServiceAccountCredentials
 
-from datetime import (
-    date,
-    datetime,
-    timedelta
-)
+from datetime import date, datetime, timedelta
 
 # =========================================================
-# CONFIG
+# CONFIG PAGE
 # =========================================================
 
 st.set_page_config(
@@ -27,7 +21,7 @@ st.set_page_config(
 )
 
 # =========================================================
-# ESTILOS
+# CSS
 # =========================================================
 
 st.markdown("""
@@ -37,137 +31,112 @@ st.markdown("""
     font-size: 12px;
 }
 
-.apertura-card {
-    background-color: white;
-    padding: 15px;
-    border-radius: 10px;
-    border-left: 5px solid #6c5ce7;
-    box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
-    margin-bottom: 15px;
-    min-height: 120px;
+.apertura-card{
+    background:#ffffff;
+    padding:15px;
+    border-radius:12px;
+    border-left:5px solid #6c5ce7;
+    box-shadow:0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom:15px;
+    min-height:120px;
 }
 
-.fecha-est {
-    color: #d63031;
-    font-weight: bold;
-    font-size: 0.9em;
+.tienda-titulo{
+    font-size:1.1rem;
+    font-weight:700;
+    color:#2d3436;
 }
 
-.titulo-seccion {
-    color: #2d3436;
-    font-weight: bold;
-    font-size: 1.6em;
-    margin-top: 25px;
-    margin-bottom: 15px;
-    border-bottom: 3px solid #6c5ce7;
-    padding-bottom: 8px;
+.fecha-est{
+    color:#d63031;
+    font-weight:bold;
+    font-size:0.9rem;
 }
 
-.tienda-titulo {
-    color: #2d3436;
-    font-size: 1.1em;
-    font-weight: bold;
+.titulo-seccion{
+    color:#2d3436;
+    font-weight:bold;
+    font-size:1.6em;
+    margin-top:25px;
+    margin-bottom:15px;
+    border-bottom:3px solid #6c5ce7;
+    padding-bottom:8px;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
 # =========================================================
-# GOOGLE SHEETS
+# GOOGLE SHEETS CONNECTION
 # =========================================================
 
 @st.cache_resource
-def conectar_google_sheets():
+def conectar_google():
 
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
 
-    creds_dict = dict(
-        st.secrets["gcp_service_account"]
+    creds_dict = dict(st.secrets["gcp_service_account"])
+
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(
+        creds_dict,
+        scope
     )
 
-    creds = (
-        ServiceAccountCredentials
-        .from_json_keyfile_dict(
-            creds_dict,
-            scope
-        )
-    )
+    client = gspread.authorize(creds)
 
-    return gspread.authorize(creds)
+    return client
 
-client = conectar_google_sheets()
+client = conectar_google()
 
 # =========================================================
-# ABRIR HOJAS
+# OPEN SHEETS
 # =========================================================
 
-def abrir_hoja(
-    nombre_archivo,
-    nombre_pestaña=None
-):
+def abrir_hoja(nombre_archivo, nombre_hoja=None):
 
-    try:
+    sh = client.open(nombre_archivo)
 
-        sh = client.open(
-            nombre_archivo
-        )
+    if nombre_hoja:
+        return sh.worksheet(nombre_hoja)
 
-        return (
-            sh.worksheet(nombre_pestaña)
-            if nombre_pestaña
-            else sh.sheet1
-        )
-
-    except Exception as e:
-
-        st.error(
-            f"Error hoja {nombre_archivo}: {e}"
-        )
-
-        return None
+    return sh.sheet1
 
 # =========================================================
-# CARGA DATA
+# LOAD DATA
 # =========================================================
 
 @st.cache_data(ttl=60)
-def cargar_df(
-    nombre_archivo,
-    pestaña=None
-):
+def cargar_df(nombre_archivo, hoja=None):
 
-    sheet = abrir_hoja(
-        nombre_archivo,
-        pestaña
-    )
+    try:
 
-    if sheet is None:
+        sheet = abrir_hoja(nombre_archivo, hoja)
+
+        data = sheet.get_all_records()
+
+        df = pd.DataFrame(data)
+
+        if not df.empty:
+
+            df.columns = [
+                str(c).strip().upper()
+                for c in df.columns
+            ]
+
+        return df.astype(str)
+
+    except:
+
         return pd.DataFrame()
 
-    data = sheet.get_all_records()
-
-    df = pd.DataFrame(data)
-
-    if not df.empty:
-
-        df.columns = [
-            str(c).strip().upper()
-            for c in df.columns
-        ]
-
-    return df.astype(str)
-
 # =========================================================
-# UPDATE ARRIBO
+# UPDATE FUNCTIONS
 # =========================================================
 
-def update_consolidado_arribo(
-    doc_id,
-    fecha
-):
+def update_consolidado_arribo(doc, fecha):
 
     try:
 
@@ -175,9 +144,9 @@ def update_consolidado_arribo(
             "Consolidado - Carcasas"
         )
 
-        df = pd.DataFrame(
-            sheet.get_all_records()
-        )
+        data = sheet.get_all_records()
+
+        df = pd.DataFrame(data)
 
         df.columns = [
             str(c).strip().upper()
@@ -185,18 +154,15 @@ def update_consolidado_arribo(
         ]
 
         indices = df[
-            df["DOC"].astype(str)
-            == str(doc_id)
+            df["DOC"].astype(str) == str(doc)
         ].index
 
         col_status = (
-            df.columns.get_loc("STATUS")
-            + 1
+            df.columns.get_loc("STATUS") + 1
         )
 
         col_fecha = (
-            df.columns.get_loc("FCH LLEGADA")
-            + 1
+            df.columns.get_loc("FCH LLEGADA") + 1
         )
 
         for idx in indices:
@@ -215,17 +181,17 @@ def update_consolidado_arribo(
 
         return True
 
-    except:
+    except Exception as e:
+
+        st.error(e)
+
         return False
 
 # =========================================================
-# UPDATE ALMACENADO
+# UPDATE ASN
 # =========================================================
 
-def update_recepcion_almacenado(
-    asn_id,
-    fecha
-):
+def update_recepcion_almacenado(asn, fecha):
 
     try:
 
@@ -244,18 +210,15 @@ def update_recepcion_almacenado(
         ]
 
         indices = df[
-            df["ASN"].astype(str)
-            == str(asn_id)
+            df["ASN"].astype(str) == str(asn)
         ].index
 
         col_status = (
-            df.columns.get_loc("STATUS_REC")
-            + 1
+            df.columns.get_loc("STATUS_REC") + 1
         )
 
         col_fecha = (
-            df.columns.get_loc("FCH_ALMACENADO")
-            + 1
+            df.columns.get_loc("FCH_ALMACENADO") + 1
         )
 
         for idx in indices:
@@ -274,16 +237,17 @@ def update_recepcion_almacenado(
 
         return True
 
-    except:
+    except Exception as e:
+
+        st.error(e)
+
         return False
 
 # =========================================================
-# LOAD DATA
+# LOAD TABLES
 # =========================================================
 
-with st.spinner(
-    "Sincronizando con Google Drive..."
-):
+with st.spinner("Sincronizando con Google Sheets..."):
 
     df_import = cargar_df(
         "Consolidado - Carcasas"
@@ -294,12 +258,12 @@ with st.spinner(
         "MOVIMIENTOS"
     )
 
-    df_tiendas_raw = cargar_df(
+    df_tiendas = cargar_df(
         "TIENDAS CARCASAS"
     )
 
 # =========================================================
-# MENU
+# SIDEBAR
 # =========================================================
 
 menu = st.sidebar.radio(
@@ -316,9 +280,7 @@ menu = st.sidebar.radio(
 
 if menu == "📦 Importaciones":
 
-    st.title(
-        "📦 Gestión de Importaciones"
-    )
+    st.title("📦 Gestión de Importaciones")
 
     tab_dash, tab_recep, tab_ops = st.tabs([
         "📊 Dashboard",
@@ -336,12 +298,12 @@ if menu == "📦 Importaciones":
             "🏪 Próximas Aperturas"
         )
 
-        if not df_tiendas_raw.empty:
+        if not df_tiendas.empty:
 
             try:
 
-                df_ap = df_tiendas_raw[
-                    df_tiendas_raw["ESTADO"]
+                df_ap = df_tiendas[
+                    df_tiendas["ESTADO"]
                     .str.upper()
                     .str.contains(
                         "PENDIENTE",
@@ -349,31 +311,20 @@ if menu == "📦 Importaciones":
                     )
                 ].copy()
 
-                df_ap["FCH_DT"] = (
-                    pd.to_datetime(
-                        df_ap["FCH ESTIMADA"],
-                        dayfirst=True,
-                        errors="coerce"
-                    )
+                df_ap["FCH_DT"] = pd.to_datetime(
+                    df_ap["FCH ESTIMADA"],
+                    dayfirst=True,
+                    errors="coerce"
                 )
 
                 hoy = datetime.now()
 
-                limite = (
-                    hoy
-                    + timedelta(days=60)
-                )
+                limite = hoy + timedelta(days=60)
 
                 df_filtrado = df_ap[
-                    (
-                        df_ap["FCH_DT"]
-                        >= hoy
-                    )
+                    (df_ap["FCH_DT"] >= hoy)
                     &
-                    (
-                        df_ap["FCH_DT"]
-                        <= limite
-                    )
+                    (df_ap["FCH_DT"] <= limite)
                 ].sort_values("FCH_DT")
 
                 if not df_filtrado.empty:
@@ -388,31 +339,35 @@ if menu == "📦 Importaciones":
 
                             st.markdown(f"""
                             <div class="apertura-card">
+
                                 <div class="tienda-titulo">
-                                    {row['TIENDA']}
+                                    🏪 {row['TIENDA']}
                                 </div>
 
-                                <div style="color:#636e72;font-size:0.85em;">
+                                <div style="color:#636e72;font-size:0.85em;margin-top:8px;">
                                     {row['DESCRIPCION']}
                                 </div>
 
-                                <br>
-
-                                <div class="fecha-est">
+                                <div class="fecha-est" style="margin-top:15px;">
                                     📅 {row['FCH ESTIMADA']}
                                 </div>
+
                             </div>
                             """, unsafe_allow_html=True)
 
                 else:
 
                     st.info(
-                        "Sin aperturas próximas."
+                        "No hay aperturas próximas."
                     )
 
             except Exception as e:
 
                 st.error(e)
+
+        # =================================================
+        # STATUS IMPORTACIONES
+        # =================================================
 
         st.markdown(
             '<div class="titulo-seccion">STATUS IMPORTACIONES</div>',
@@ -424,24 +379,20 @@ if menu == "📦 Importaciones":
             m1, m2, m3 = st.columns(3)
 
             total_docs = (
-                df_import["DOC"]
-                .nunique()
+                df_import["DOC"].nunique()
             )
 
-            arribados = (
-                df_import[
-                    df_import["STATUS"]
-                    .str.upper()
-                    .str.contains(
-                        "ARRIBADO",
-                        na=False
-                    )
-                ]["DOC"]
-                .nunique()
-            )
+            arribados = df_import[
+                df_import["STATUS"]
+                .str.upper()
+                .str.contains(
+                    "ARRIBADO",
+                    na=False
+                )
+            ]["DOC"].nunique()
 
             m1.metric(
-                "Total",
+                "Total Importaciones",
                 total_docs
             )
 
@@ -459,6 +410,10 @@ if menu == "📦 Importaciones":
 
             c1, c2 = st.columns(2)
 
+            # =============================================
+            # PENDIENTES
+            # =============================================
+
             with c1:
 
                 st.markdown(
@@ -474,22 +429,31 @@ if menu == "📦 Importaciones":
                     )
                 ]
 
-                st.dataframe(
-                    (
-                        df_p.groupby("DOC")
+                if not df_p.empty:
+
+                    resumen_p = (
+                        df_p
+                        .groupby("DOC")
                         .size()
                         .reset_index(
                             name="ASNs"
                         )
-                    ),
-                    width="stretch",
-                    hide_index=True
-                )
+                    )
+
+                    st.dataframe(
+                        resumen_p,
+                        width="stretch",
+                        hide_index=True
+                    )
+
+            # =============================================
+            # ARRIBADOS
+            # =============================================
 
             with c2:
 
                 st.markdown(
-                    "### ✅ Confirmados"
+                    "### ✅ Arribados"
                 )
 
                 df_a = df_import[
@@ -501,19 +465,24 @@ if menu == "📦 Importaciones":
                     )
                 ]
 
-                st.dataframe(
-                    (
-                        df_a.groupby(
+                if not df_a.empty:
+
+                    resumen_a = (
+                        df_a
+                        .groupby(
                             ["DOC", "ETA"]
                         )
                         .size()
                         .reset_index(
                             name="ASNs"
                         )
-                    ),
-                    width="stretch",
-                    hide_index=True
-                )
+                    )
+
+                    st.dataframe(
+                        resumen_a,
+                        width="stretch",
+                        hide_index=True
+                    )
 
     # =====================================================
     # RECEPCION
@@ -527,11 +496,23 @@ if menu == "📦 Importaciones":
 
         col_p, col_a, col_t = st.columns(3)
 
+        # =================================================
+        # PENDIENTE
+        # =================================================
+
         with col_p:
 
-            st.markdown(
-                "#### 🚨 Pendientes"
-            )
+            st.markdown("""
+            <div style="
+                background-color:#f8f9fa;
+                padding:15px;
+                border-radius:10px;
+                border-left:5px solid #ff4b4b;
+            ">
+            <h4>🚨 RECEPCIONADO</h4>
+            <small>Pendiente</small>
+            </div>
+            """, unsafe_allow_html=True)
 
             df_p = df_recepcion[
                 df_recepcion["STATUS_REC"]
@@ -541,28 +522,43 @@ if menu == "📦 Importaciones":
 
             if not df_p.empty:
 
+                resumen = (
+                    df_p
+                    .groupby(
+                        [
+                            "IMPORTACION",
+                            "DESTINO"
+                        ]
+                    )
+                    .size()
+                    .reset_index(
+                        name="ASNs"
+                    )
+                )
+
                 st.dataframe(
-                    (
-                        df_p.groupby(
-                            [
-                                "IMPORTACION",
-                                "DESTINO"
-                            ]
-                        )
-                        .size()
-                        .reset_index(
-                            name="ASNs"
-                        )
-                    ),
+                    resumen,
                     width="stretch",
                     hide_index=True
                 )
 
+        # =================================================
+        # ALMACENADO
+        # =================================================
+
         with col_a:
 
-            st.markdown(
-                "#### 🏢 Almacenado"
-            )
+            st.markdown("""
+            <div style="
+                background-color:#f0fff4;
+                padding:15px;
+                border-radius:10px;
+                border-left:5px solid #28a745;
+            ">
+            <h4>🏢 ALMACENADO</h4>
+            <small>En stock</small>
+            </div>
+            """, unsafe_allow_html=True)
 
             df_alm = df_recepcion[
                 df_recepcion["STATUS_REC"]
@@ -572,28 +568,43 @@ if menu == "📦 Importaciones":
 
             if not df_alm.empty:
 
+                resumen = (
+                    df_alm
+                    .groupby(
+                        [
+                            "IMPORTACION",
+                            "DESTINO"
+                        ]
+                    )
+                    .size()
+                    .reset_index(
+                        name="ASNs"
+                    )
+                )
+
                 st.dataframe(
-                    (
-                        df_alm.groupby(
-                            [
-                                "IMPORTACION",
-                                "DESTINO"
-                            ]
-                        )
-                        .size()
-                        .reset_index(
-                            name="ASNs"
-                        )
-                    ),
+                    resumen,
                     width="stretch",
                     hide_index=True
                 )
 
+        # =================================================
+        # PROGRAMADO
+        # =================================================
+
         with col_t:
 
-            st.markdown(
-                "#### 🚚 Programado"
-            )
+            st.markdown("""
+            <div style="
+                background-color:#fffaf0;
+                padding:15px;
+                border-radius:10px;
+                border-left:5px solid #ffa500;
+            ">
+            <h4>🚚 PROGRAMADO</h4>
+            <small>Despachos</small>
+            </div>
+            """, unsafe_allow_html=True)
 
             df_prog = df_recepcion[
                 df_recepcion["STATUS_REC"]
@@ -603,19 +614,22 @@ if menu == "📦 Importaciones":
 
             if not df_prog.empty:
 
+                resumen = (
+                    df_prog
+                    .groupby(
+                        [
+                            "IMPORTACION",
+                            "ID_DESPACHO"
+                        ]
+                    )
+                    .size()
+                    .reset_index(
+                        name="ASNs"
+                    )
+                )
+
                 st.dataframe(
-                    (
-                        df_prog.groupby(
-                            [
-                                "IMPORTACION",
-                                "ID_DESPACHO"
-                            ]
-                        )
-                        .size()
-                        .reset_index(
-                            name="ASNs"
-                        )
-                    ),
+                    resumen,
                     width="stretch",
                     hide_index=True
                 )
@@ -630,17 +644,19 @@ if menu == "📦 Importaciones":
             "⚙️ Operaciones"
         )
 
-        c_left, c_right = st.columns(2)
+        c1, c2 = st.columns(2)
 
+        # =================================================
         # ARRIBO
+        # =================================================
 
-        with c_left:
+        with c1:
 
             st.subheader(
                 "Confirmar Arribo"
             )
 
-            df_ops_pend = df_import[
+            df_ops = df_import[
                 ~df_import["STATUS"]
                 .str.upper()
                 .str.contains(
@@ -649,13 +665,13 @@ if menu == "📦 Importaciones":
                 )
             ]
 
-            docs_list = (
-                df_ops_pend["DOC"]
+            docs = (
+                df_ops["DOC"]
                 .unique()
                 .tolist()
             )
 
-            if docs_list:
+            if docs:
 
                 with st.form(
                     "form_arribo"
@@ -663,23 +679,26 @@ if menu == "📦 Importaciones":
 
                     doc_sel = st.selectbox(
                         "DOC",
-                        docs_list
+                        docs
                     )
 
-                    f_arr = st.date_input(
-                        "Fecha",
-                        date.today(),
-                        key="f_arr"
+                    fecha = st.date_input(
+                        "Fecha Arribo",
+                        date.today()
                     )
 
-                    if st.form_submit_button(
-                        "Actualizar"
-                    ):
+                    enviar = st.form_submit_button(
+                        "Guardar"
+                    )
 
-                        if update_consolidado_arribo(
+                    if enviar:
+
+                        ok = update_consolidado_arribo(
                             doc_sel,
-                            f_arr
-                        ):
+                            fecha
+                        )
+
+                        if ok:
 
                             st.success(
                                 "Actualizado"
@@ -689,15 +708,23 @@ if menu == "📦 Importaciones":
 
                             st.rerun()
 
-        # ALMACENADO
+            else:
 
-        with c_right:
+                st.info(
+                    "Sin documentos pendientes"
+                )
+
+        # =================================================
+        # ALMACENADO
+        # =================================================
+
+        with c2:
 
             st.subheader(
-                "Confirmar Almacenado"
+                "Confirmar Almacenaje"
             )
 
-            df_ops_alm = df_recepcion[
+            df_ops = df_recepcion[
                 df_recepcion["STATUS_REC"]
                 .str.upper()
                 .str.contains(
@@ -706,13 +733,13 @@ if menu == "📦 Importaciones":
                 )
             ]
 
-            asns_list = (
-                df_ops_alm["ASN"]
+            asns = (
+                df_ops["ASN"]
                 .unique()
                 .tolist()
             )
 
-            if asns_list:
+            if asns:
 
                 with st.form(
                     "form_almacen"
@@ -720,31 +747,40 @@ if menu == "📦 Importaciones":
 
                     asn_sel = st.selectbox(
                         "ASN",
-                        asns_list
+                        asns
                     )
 
-                    f_alm = st.date_input(
+                    fecha = st.date_input(
                         "Fecha",
-                        date.today(),
-                        key="f_alm"
+                        date.today()
                     )
 
-                    if st.form_submit_button(
-                        "Actualizar"
-                    ):
+                    enviar = st.form_submit_button(
+                        "Guardar"
+                    )
 
-                        if update_recepcion_almacenado(
+                    if enviar:
+
+                        ok = update_recepcion_almacenado(
                             asn_sel,
-                            f_alm
-                        ):
+                            fecha
+                        )
+
+                        if ok:
 
                             st.success(
-                                "Actualizado"
+                                "ASN almacenado"
                             )
 
                             st.cache_data.clear()
 
                             st.rerun()
+
+            else:
+
+                st.info(
+                    "Sin ASN pendientes"
+                )
 
 # =========================================================
 # DISTRIBUCION
@@ -752,16 +788,14 @@ if menu == "📦 Importaciones":
 
 elif menu == "🚚 Distribución":
 
-    st.title(
-        "🚚 Distribución"
-    )
+    st.title("🚚 Distribución")
 
     st.info(
-        "Módulo en construcción."
+        "Módulo en construcción"
     )
 
 # =========================================================
-# SIDEBAR
+# SIDEBAR SYNC
 # =========================================================
 
 if st.sidebar.button(
