@@ -1,752 +1,773 @@
+# =========================================================
+# SISTEMA LOGÍSTICO CARCASAS - STREAMLIT CLOUD
+# =========================================================
+
 import streamlit as st
 import pandas as pd
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
-import io
 
-# =====================================================
+from oauth2client.service_account import (
+    ServiceAccountCredentials
+)
+
+from datetime import (
+    date,
+    datetime,
+    timedelta
+)
+
+# =========================================================
 # CONFIG
-# =====================================================
+# =========================================================
 
 st.set_page_config(
-    page_title="Sistema Logístico",
+    page_title="Sistema Logístico Carcasas",
+    page_icon="📦",
     layout="wide"
 )
 
-# =====================================================
-# GOOGLE SHEETS CONNECTION
-# =====================================================
+# =========================================================
+# ESTILOS
+# =========================================================
 
-scope = [
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/drive"
-]
+st.markdown("""
+<style>
 
-creds_dict = dict(st.secrets["gcp_service_account"])
+.stDataFrame {
+    font-size: 12px;
+}
 
-creds = ServiceAccountCredentials.from_json_keyfile_dict(
-    creds_dict,
-    scope
-)
+.apertura-card {
+    background-color: white;
+    padding: 15px;
+    border-radius: 10px;
+    border-left: 5px solid #6c5ce7;
+    box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 15px;
+    min-height: 120px;
+}
 
-client = gspread.authorize(creds)
+.fecha-est {
+    color: #d63031;
+    font-weight: bold;
+    font-size: 0.9em;
+}
 
-# =====================================================
-# SHEETS
-# =====================================================
+.titulo-seccion {
+    color: #2d3436;
+    font-weight: bold;
+    font-size: 1.6em;
+    margin-top: 25px;
+    margin-bottom: 15px;
+    border-bottom: 3px solid #6c5ce7;
+    padding-bottom: 8px;
+}
 
-sheet_importaciones = client.open(
-    "IMPORTACIONES"
-).sheet1
+.tienda-titulo {
+    color: #2d3436;
+    font-size: 1.1em;
+    font-weight: bold;
+}
 
-sheet_recepcion = client.open(
-    "RECEPCION_IMPORTACIONES"
-).sheet1
+</style>
+""", unsafe_allow_html=True)
 
-sheet_distribucion = client.open(
-    "DISTRIBUCION"
-).sheet1
+# =========================================================
+# GOOGLE SHEETS
+# =========================================================
 
-sheet_despacho_asn = client.open(
-    "DESPACHO_ASN"
-).sheet1
+@st.cache_resource
+def conectar_google_sheets():
 
-# =====================================================
-# HELPERS
-# =====================================================
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive"
+    ]
 
-def cargar_df(sheet):
+    creds_dict = dict(
+        st.secrets["gcp_service_account"]
+    )
+
+    creds = (
+        ServiceAccountCredentials
+        .from_json_keyfile_dict(
+            creds_dict,
+            scope
+        )
+    )
+
+    return gspread.authorize(creds)
+
+client = conectar_google_sheets()
+
+# =========================================================
+# ABRIR HOJAS
+# =========================================================
+
+def abrir_hoja(
+    nombre_archivo,
+    nombre_pestaña=None
+):
+
+    try:
+
+        sh = client.open(
+            nombre_archivo
+        )
+
+        return (
+            sh.worksheet(nombre_pestaña)
+            if nombre_pestaña
+            else sh.sheet1
+        )
+
+    except Exception as e:
+
+        st.error(
+            f"Error hoja {nombre_archivo}: {e}"
+        )
+
+        return None
+
+# =========================================================
+# CARGA DATA
+# =========================================================
+
+@st.cache_data(ttl=60)
+def cargar_df(
+    nombre_archivo,
+    pestaña=None
+):
+
+    sheet = abrir_hoja(
+        nombre_archivo,
+        pestaña
+    )
+
+    if sheet is None:
+        return pd.DataFrame()
 
     data = sheet.get_all_records()
 
-    if len(data) == 0:
-        return pd.DataFrame()
+    df = pd.DataFrame(data)
 
-    return pd.DataFrame(data)
+    if not df.empty:
 
-def limpiar_valor(x):
-
-    if pd.isna(x):
-        return ""
-
-    if isinstance(x, pd.Timestamp):
-        return x.strftime("%d/%m/%Y")
-
-    return str(x)
-
-def generar_id_despacho(df, cuenta):
-
-    fecha_hoy = datetime.now().strftime("%Y%m%d")
-
-    cuenta_cod = (
-        str(cuenta)
-        .replace(" ", "")
-        [:3]
-        .upper()
-    )
-
-    prefijo = f"{fecha_hoy}-{cuenta_cod}"
-
-    if df.empty:
-        correlativo = 1
-
-    else:
-
-        ids = df["ID_DESPACHO"].astype(str)
-
-        ids_hoy = ids[
-            ids.str.startswith(prefijo)
+        df.columns = [
+            str(c).strip().upper()
+            for c in df.columns
         ]
 
-        if len(ids_hoy) == 0:
-            correlativo = 1
+    return df.astype(str)
 
-        else:
+# =========================================================
+# UPDATE ARRIBO
+# =========================================================
 
-            nums = []
+def update_consolidado_arribo(
+    doc_id,
+    fecha
+):
 
-            for x in ids_hoy:
+    try:
 
-                try:
-                    nums.append(
-                        int(x.split("-")[-1])
-                    )
-                except:
-                    pass
+        sheet = abrir_hoja(
+            "Consolidado - Carcasas"
+        )
 
-            correlativo = max(nums) + 1
+        df = pd.DataFrame(
+            sheet.get_all_records()
+        )
 
-    return f"{prefijo}-{str(correlativo).zfill(3)}"
+        df.columns = [
+            str(c).strip().upper()
+            for c in df.columns
+        ]
 
-# =====================================================
+        indices = df[
+            df["DOC"].astype(str)
+            == str(doc_id)
+        ].index
+
+        col_status = (
+            df.columns.get_loc("STATUS")
+            + 1
+        )
+
+        col_fecha = (
+            df.columns.get_loc("FCH LLEGADA")
+            + 1
+        )
+
+        for idx in indices:
+
+            sheet.update_cell(
+                idx + 2,
+                col_status,
+                "ARRIBADO"
+            )
+
+            sheet.update_cell(
+                idx + 2,
+                col_fecha,
+                str(fecha)
+            )
+
+        return True
+
+    except:
+        return False
+
+# =========================================================
+# UPDATE ALMACENADO
+# =========================================================
+
+def update_recepcion_almacenado(
+    asn_id,
+    fecha
+):
+
+    try:
+
+        sheet = abrir_hoja(
+            "RECEPCION_IMPORTACIONES",
+            "MOVIMIENTOS"
+        )
+
+        data = sheet.get_all_records()
+
+        df = pd.DataFrame(data)
+
+        df.columns = [
+            str(c).strip().upper()
+            for c in df.columns
+        ]
+
+        indices = df[
+            df["ASN"].astype(str)
+            == str(asn_id)
+        ].index
+
+        col_status = (
+            df.columns.get_loc("STATUS_REC")
+            + 1
+        )
+
+        col_fecha = (
+            df.columns.get_loc("FCH_ALMACENADO")
+            + 1
+        )
+
+        for idx in indices:
+
+            sheet.update_cell(
+                idx + 2,
+                col_status,
+                "ALMACENADO"
+            )
+
+            sheet.update_cell(
+                idx + 2,
+                col_fecha,
+                str(fecha)
+            )
+
+        return True
+
+    except:
+        return False
+
+# =========================================================
 # LOAD DATA
-# =====================================================
+# =========================================================
 
-df_import = cargar_df(sheet_importaciones)
-df_recep = cargar_df(sheet_recepcion)
-df_dist = cargar_df(sheet_distribucion)
-df_despacho = cargar_df(sheet_despacho_asn)
+with st.spinner(
+    "Sincronizando con Google Drive..."
+):
 
-# =====================================================
+    df_import = cargar_df(
+        "Consolidado - Carcasas"
+    )
+
+    df_recepcion = cargar_df(
+        "RECEPCION_IMPORTACIONES",
+        "MOVIMIENTOS"
+    )
+
+    df_tiendas_raw = cargar_df(
+        "TIENDAS CARCASAS"
+    )
+
+# =========================================================
 # MENU
-# =====================================================
+# =========================================================
 
 menu = st.sidebar.radio(
-    "MÓDULOS",
+    "MENÚ PRINCIPAL",
     [
-        "IMPORTACIONES",
-        "DISTRIBUCIÓN",
-        "APERTURA"
+        "📦 Importaciones",
+        "🚚 Distribución"
     ]
 )
 
-# =====================================================
+# =========================================================
 # IMPORTACIONES
-# =====================================================
+# =========================================================
 
-if menu == "IMPORTACIONES":
+if menu == "📦 Importaciones":
 
-    st.title("📦 IMPORTACIONES")
-
-    st.subheader("Actualizar fecha llegada")
-
-    importaciones = sorted(
-        df_import["IMPORTACION"]
-        .astype(str)
-        .unique()
+    st.title(
+        "📦 Gestión de Importaciones"
     )
 
-    imp_sel = st.selectbox(
-        "Importación",
-        importaciones,
-        key="imp_sel"
-    )
+    tab_dash, tab_recep, tab_ops = st.tabs([
+        "📊 Dashboard",
+        "📑 Recepción",
+        "⚙️ Operaciones"
+    ])
 
-    fecha_llegada = st.date_input(
-        "Fecha llegada",
-        key="fecha_llegada"
-    )
+    # =====================================================
+    # DASHBOARD
+    # =====================================================
 
-    if st.button(
-        "Guardar fecha llegada",
-        key="btn_fecha"
-    ):
+    with tab_dash:
 
-        mask = (
-            df_import["IMPORTACION"]
-            .astype(str)
-            == str(imp_sel)
+        st.subheader(
+            "🏪 Próximas Aperturas"
         )
 
-        df_import.loc[
-            mask,
-            "FECHA_LLEGADA"
-        ] = fecha_llegada.strftime(
-            "%d/%m/%Y"
-        )
+        if not df_tiendas_raw.empty:
 
-        sheet_importaciones.clear()
+            try:
 
-        sheet_importaciones.update(
-            [
-                df_import.columns.values.tolist()
-            ] +
-            df_import.values.tolist()
-        )
-
-        st.success("Actualizado")
-
-    st.divider()
-
-    st.subheader("Recepciones")
-
-    recibidas = df_import[
-        df_import["FECHA_LLEGADA"]
-        .astype(str)
-        != ""
-    ]
-
-    if not recibidas.empty:
-
-        resumen = (
-            recibidas
-            .groupby(
-                [
-                    "IMPORTACION",
-                    "CLIENTE",
-                    "FECHA_LLEGADA"
-                ]
-            )
-            .agg(
-                TOTAL_ASN=("ASN", "count"),
-                TOTAL_UNIDADES=("CANTIDAD", "sum")
-            )
-            .reset_index()
-        )
-
-        st.dataframe(
-            resumen,
-            width="stretch"
-        )
-
-        imp_view = st.selectbox(
-            "Ver detalle",
-            resumen["IMPORTACION"],
-            key="ver_detalle"
-        )
-
-        detalle = recibidas[
-            recibidas["IMPORTACION"]
-            == imp_view
-        ]
-
-        cards = (
-            detalle
-            .groupby("DESTINO")
-            .agg(
-                ASN=("ASN", "count"),
-                UNIDADES=("CANTIDAD", "sum")
-            )
-            .reset_index()
-        )
-
-        st.dataframe(
-            cards,
-            width="stretch"
-        )
-
-# =====================================================
-# DISTRIBUCION
-# =====================================================
-
-elif menu == "DISTRIBUCIÓN":
-
-    st.title("🚚 DISTRIBUCIÓN")
-
-    tabs = st.tabs(
-        [
-            "Carga Masiva",
-            "Carga Manual",
-            "Despachos"
-        ]
-    )
-
-    # =================================================
-    # CARGA MASIVA
-    # =================================================
-
-    with tabs[0]:
-
-        archivo = st.file_uploader(
-            "Subir Excel",
-            type=["xlsx"],
-            key="upload"
-        )
-
-        if archivo:
-
-            df_excel = pd.read_excel(
-                archivo
-            )
-
-            st.dataframe(
-                df_excel.head(),
-                width="stretch"
-            )
-
-            if st.button(
-                "Guardar carga masiva",
-                key="guardar_masiva"
-            ):
-
-                for _, row in df_excel.iterrows():
-
-                    cuenta = limpiar_valor(
-                        row.get("CUENTA", "")
-                    )
-
-                    id_despacho = generar_id_despacho(
-                        df_dist,
-                        cuenta
-                    )
-
-                    fila = [
-
-                        id_despacho,
-
-                        limpiar_valor(
-                            row.get(
-                                "FECHA ENTREGA",
-                                ""
-                            )
-                        ),
-
-                        cuenta,
-
-                        limpiar_valor(
-                            row.get(
-                                "CLIENTE",
-                                ""
-                            )
-                        ),
-
-                        limpiar_valor(
-                            row.get(
-                                "HORA DE CITA",
-                                ""
-                            )
-                        ),
-
-                        limpiar_valor(
-                            row.get(
-                                "PROCESO",
-                                ""
-                            )
-                        ),
-
-                        limpiar_valor(
-                            row.get(
-                                "ORIGEN",
-                                ""
-                            )
-                        ),
-
-                        limpiar_valor(
-                            row.get(
-                                "DESTINO",
-                                ""
-                            )
-                        ),
-
-                        limpiar_valor(
-                            row.get(
-                                "T  TRANSPORTE",
-                                ""
-                            )
-                        ),
-
-                        limpiar_valor(
-                            row.get(
-                                "CHOFER",
-                                ""
-                            )
-                        ),
-
-                        limpiar_valor(
-                            row.get(
-                                "DIRECCION",
-                                ""
-                            )
-                        ),
-
-                        limpiar_valor(
-                            row.get(
-                                "CONTACTO",
-                                ""
-                            )
-                        ),
-
-                        limpiar_valor(
-                            row.get(
-                                "TELEFONO",
-                                ""
-                            )
-                        ),
-
-                        limpiar_valor(
-                            row.get(
-                                "REFERENCIA",
-                                ""
-                            )
-                        ),
-
-                        ""
-                    ]
-
-                    sheet_distribucion.append_row(
-                        fila
-                    )
-
-                st.success("Carga realizada")
-
-    # =================================================
-    # MANUAL
-    # =================================================
-
-    with tabs[1]:
-
-        st.subheader("Carga manual")
-
-        fecha = st.date_input(
-            "Fecha entrega",
-            key="manual_fecha"
-        )
-
-        cuenta = st.text_input(
-            "Cuenta",
-            key="manual_cuenta"
-        )
-
-        cliente = st.text_input(
-            "Cliente",
-            key="manual_cliente"
-        )
-
-        destino = st.text_input(
-            "Destino",
-            key="manual_destino"
-        )
-
-        if st.button(
-            "Guardar despacho",
-            key="guardar_manual"
-        ):
-
-            id_despacho = generar_id_despacho(
-                df_dist,
-                cuenta
-            )
-
-            fila = [
-
-                id_despacho,
-                fecha.strftime("%d/%m/%Y"),
-                cuenta,
-                cliente,
-                "",
-                "",
-                "",
-                destino,
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                ""
-            ]
-
-            sheet_distribucion.append_row(
-                fila
-            )
-
-            st.success("Guardado")
-
-    # =================================================
-    # DESPACHOS
-    # =================================================
-
-    with tabs[2]:
-
-        st.subheader("Resumen despachos")
-
-        if not df_dist.empty:
-
-            resumen = (
-                df_dist
-                .groupby(
-                    [
-                        "ID_DESPACHO",
-                        "FECHA ENTREGA",
-                        "CUENTA"
-                    ]
-                )
-                .agg(
-                    CLIENTES=("CLIENTE", "count")
-                )
-                .reset_index()
-            )
-
-            st.dataframe(
-                resumen,
-                width="stretch"
-            )
-
-            despacho_sel = st.selectbox(
-                "Despacho",
-                resumen["ID_DESPACHO"],
-                key="despacho_sel"
-            )
-
-            detalle = df_dist[
-                df_dist["ID_DESPACHO"]
-                == despacho_sel
-            ]
-
-            st.dataframe(
-                detalle,
-                width="stretch"
-            )
-
-            st.markdown("### ➕ Agregar ASN")
-
-            pendientes = df_recep[
-                (
-                    df_recep["STATUS_REC"]
-                    .astype(str)
+                df_ap = df_tiendas_raw[
+                    df_tiendas_raw["ESTADO"]
                     .str.upper()
-                    == "PENDIENTE"
+                    .str.contains(
+                        "PENDIENTE",
+                        na=False
+                    )
+                ].copy()
+
+                df_ap["FCH_DT"] = (
+                    pd.to_datetime(
+                        df_ap["FCH ESTIMADA"],
+                        dayfirst=True,
+                        errors="coerce"
+                    )
+                )
+
+                hoy = datetime.now()
+
+                limite = (
+                    hoy
+                    + timedelta(days=60)
+                )
+
+                df_filtrado = df_ap[
+                    (
+                        df_ap["FCH_DT"]
+                        >= hoy
+                    )
+                    &
+                    (
+                        df_ap["FCH_DT"]
+                        <= limite
+                    )
+                ].sort_values("FCH_DT")
+
+                if not df_filtrado.empty:
+
+                    cols = st.columns(4)
+
+                    for i, (_, row) in enumerate(
+                        df_filtrado.iterrows()
+                    ):
+
+                        with cols[i % 4]:
+
+                            st.markdown(f"""
+                            <div class="apertura-card">
+                                <div class="tienda-titulo">
+                                    {row['TIENDA']}
+                                </div>
+
+                                <div style="color:#636e72;font-size:0.85em;">
+                                    {row['DESCRIPCION']}
+                                </div>
+
+                                <br>
+
+                                <div class="fecha-est">
+                                    📅 {row['FCH ESTIMADA']}
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                else:
+
+                    st.info(
+                        "Sin aperturas próximas."
+                    )
+
+            except Exception as e:
+
+                st.error(e)
+
+        st.markdown(
+            '<div class="titulo-seccion">STATUS IMPORTACIONES</div>',
+            unsafe_allow_html=True
+        )
+
+        if not df_import.empty:
+
+            m1, m2, m3 = st.columns(3)
+
+            total_docs = (
+                df_import["DOC"]
+                .nunique()
+            )
+
+            arribados = (
+                df_import[
+                    df_import["STATUS"]
+                    .str.upper()
+                    .str.contains(
+                        "ARRIBADO",
+                        na=False
+                    )
+                ]["DOC"]
+                .nunique()
+            )
+
+            m1.metric(
+                "Total",
+                total_docs
+            )
+
+            m2.metric(
+                "Arribados",
+                arribados
+            )
+
+            m3.metric(
+                "En tránsito",
+                total_docs - arribados
+            )
+
+            st.divider()
+
+            c1, c2 = st.columns(2)
+
+            with c1:
+
+                st.markdown(
+                    "### ⏳ Pendientes"
+                )
+
+                df_p = df_import[
+                    ~df_import["STATUS"]
+                    .str.upper()
+                    .str.contains(
+                        "ARRIBADO",
+                        na=False
+                    )
+                ]
+
+                st.dataframe(
+                    (
+                        df_p.groupby("DOC")
+                        .size()
+                        .reset_index(
+                            name="ASNs"
+                        )
+                    ),
+                    width="stretch",
+                    hide_index=True
+                )
+
+            with c2:
+
+                st.markdown(
+                    "### ✅ Confirmados"
+                )
+
+                df_a = df_import[
+                    df_import["STATUS"]
+                    .str.upper()
+                    .str.contains(
+                        "ARRIBADO",
+                        na=False
+                    )
+                ]
+
+                st.dataframe(
+                    (
+                        df_a.groupby(
+                            ["DOC", "ETA"]
+                        )
+                        .size()
+                        .reset_index(
+                            name="ASNs"
+                        )
+                    ),
+                    width="stretch",
+                    hide_index=True
+                )
+
+    # =====================================================
+    # RECEPCION
+    # =====================================================
+
+    with tab_recep:
+
+        st.markdown(
+            "### 🗺️ Flujo Recepción"
+        )
+
+        col_p, col_a, col_t = st.columns(3)
+
+        with col_p:
+
+            st.markdown(
+                "#### 🚨 Pendientes"
+            )
+
+            df_p = df_recepcion[
+                df_recepcion["STATUS_REC"]
+                .str.upper()
+                == "PENDIENTE"
+            ]
+
+            if not df_p.empty:
+
+                st.dataframe(
+                    (
+                        df_p.groupby(
+                            [
+                                "IMPORTACION",
+                                "DESTINO"
+                            ]
+                        )
+                        .size()
+                        .reset_index(
+                            name="ASNs"
+                        )
+                    ),
+                    width="stretch",
+                    hide_index=True
+                )
+
+        with col_a:
+
+            st.markdown(
+                "#### 🏢 Almacenado"
+            )
+
+            df_alm = df_recepcion[
+                df_recepcion["STATUS_REC"]
+                .str.upper()
+                == "ALMACENADO"
+            ]
+
+            if not df_alm.empty:
+
+                st.dataframe(
+                    (
+                        df_alm.groupby(
+                            [
+                                "IMPORTACION",
+                                "DESTINO"
+                            ]
+                        )
+                        .size()
+                        .reset_index(
+                            name="ASNs"
+                        )
+                    ),
+                    width="stretch",
+                    hide_index=True
+                )
+
+        with col_t:
+
+            st.markdown(
+                "#### 🚚 Programado"
+            )
+
+            df_prog = df_recepcion[
+                df_recepcion["STATUS_REC"]
+                .str.upper()
+                == "PROGRAMADO"
+            ]
+
+            if not df_prog.empty:
+
+                st.dataframe(
+                    (
+                        df_prog.groupby(
+                            [
+                                "IMPORTACION",
+                                "ID_DESPACHO"
+                            ]
+                        )
+                        .size()
+                        .reset_index(
+                            name="ASNs"
+                        )
+                    ),
+                    width="stretch",
+                    hide_index=True
+                )
+
+    # =====================================================
+    # OPERACIONES
+    # =====================================================
+
+    with tab_ops:
+
+        st.header(
+            "⚙️ Operaciones"
+        )
+
+        c_left, c_right = st.columns(2)
+
+        # ARRIBO
+
+        with c_left:
+
+            st.subheader(
+                "Confirmar Arribo"
+            )
+
+            df_ops_pend = df_import[
+                ~df_import["STATUS"]
+                .str.upper()
+                .str.contains(
+                    "ARRIBADO",
+                    na=False
                 )
             ]
 
-            if not pendientes.empty:
+            docs_list = (
+                df_ops_pend["DOC"]
+                .unique()
+                .tolist()
+            )
 
-                tiendas = sorted(
-                    pendientes["TIENDA"]
-                    .astype(str)
-                    .unique()
-                )
+            if docs_list:
 
-                tienda_sel = st.selectbox(
-                    "Tienda",
-                    tiendas,
-                    key="tienda_asn"
-                )
-
-                df_tienda = pendientes[
-                    pendientes["TIENDA"]
-                    == tienda_sel
-                ]
-
-                seleccionar_todo = st.checkbox(
-                    "Seleccionar todos",
-                    key="all_asn"
-                )
-
-                lista_asn = (
-                    df_tienda["ASN"]
-                    .astype(str)
-                    .tolist()
-                )
-
-                asn_sel = st.multiselect(
-                    "ASN",
-                    lista_asn,
-                    default=(
-                        lista_asn
-                        if seleccionar_todo
-                        else []
-                    ),
-                    key="asn_multi"
-                )
-
-                if st.button(
-                    "Agregar ASN",
-                    key="guardar_asn"
+                with st.form(
+                    "form_arribo"
                 ):
 
-                    for _, row in df_tienda.iterrows():
+                    doc_sel = st.selectbox(
+                        "DOC",
+                        docs_list
+                    )
 
-                        if (
-                            str(row["ASN"])
-                            in asn_sel
+                    f_arr = st.date_input(
+                        "Fecha",
+                        date.today(),
+                        key="f_arr"
+                    )
+
+                    if st.form_submit_button(
+                        "Actualizar"
+                    ):
+
+                        if update_consolidado_arribo(
+                            doc_sel,
+                            f_arr
                         ):
 
-                            fila = [
-
-                                despacho_sel,
-                                row["IMPORTACION"],
-                                row["TIENDA"],
-                                row["ASN"],
-                                "EN RUTA",
-                                datetime.now().strftime(
-                                    "%d/%m/%Y"
-                                ),
-                                ""
-                            ]
-
-                            sheet_despacho_asn.append_row(
-                                fila
+                            st.success(
+                                "Actualizado"
                             )
 
-                    st.success(
-                        "ASN agregados"
-                    )
+                            st.cache_data.clear()
 
-# =====================================================
-# APERTURA
-# =====================================================
+                            st.rerun()
 
-elif menu == "APERTURA":
+        # ALMACENADO
 
-    st.title("🏪 APERTURA")
+        with c_right:
 
-    pendientes = df_recep[
-        (
-            df_recep["DESTINO"]
-            .astype(str)
-            .str.upper()
-            == "APERTURA"
-        )
-        &
-        (
-            df_recep["STATUS_REC"]
-            .astype(str)
-            .str.upper()
-            == "PENDIENTE"
-        )
-    ]
-
-    if pendientes.empty:
-
-        st.info("Sin ASN pendientes")
-
-    else:
-
-        tiendas = sorted(
-            pendientes["TIENDA"]
-            .astype(str)
-            .unique()
-        )
-
-        tienda = st.selectbox(
-            "Tienda",
-            tiendas,
-            key="ap_tienda"
-        )
-
-        df_tienda = pendientes[
-            pendientes["TIENDA"]
-            == tienda
-        ]
-
-        lista_asn = (
-            df_tienda["ASN"]
-            .astype(str)
-            .tolist()
-        )
-
-        sel_all = st.checkbox(
-            "Seleccionar todos ASN",
-            key="all_ap"
-        )
-
-        asn = st.multiselect(
-            "ASN",
-            lista_asn,
-            default=(
-                lista_asn
-                if sel_all
-                else []
-            ),
-            key="ap_asn"
-        )
-
-        fecha_ap = st.date_input(
-            "Fecha entrega",
-            key="fecha_apertura"
-        )
-
-        destino = st.text_input(
-            "Destino",
-            key="dest_ap"
-        )
-
-        chofer = st.text_input(
-            "Chofer",
-            key="chofer_ap"
-        )
-
-        transporte = st.text_input(
-            "Transporte",
-            key="trans_ap"
-        )
-
-        if st.button(
-            "Crear despacho apertura",
-            key="crear_apertura"
-        ):
-
-            id_despacho = generar_id_despacho(
-                df_dist,
-                tienda
+            st.subheader(
+                "Confirmar Almacenado"
             )
 
-            fila_dist = [
-
-                id_despacho,
-                fecha_ap.strftime("%d/%m/%Y"),
-                "CASA DE LAS CARCASAS",
-                tienda,
-                "",
-                "OUT",
-                "PULMON",
-                destino,
-                transporte,
-                chofer,
-                "",
-                "",
-                "",
-                "",
-                len(asn)
+            df_ops_alm = df_recepcion[
+                df_recepcion["STATUS_REC"]
+                .str.upper()
+                .str.contains(
+                    "PENDIENTE",
+                    na=False
+                )
             ]
 
-            sheet_distribucion.append_row(
-                fila_dist
+            asns_list = (
+                df_ops_alm["ASN"]
+                .unique()
+                .tolist()
             )
 
-            for _, row in df_tienda.iterrows():
+            if asns_list:
 
-                if str(row["ASN"]) in asn:
+                with st.form(
+                    "form_almacen"
+                ):
 
-                    fila_asn = [
-
-                        id_despacho,
-                        row["IMPORTACION"],
-                        row["TIENDA"],
-                        row["ASN"],
-                        "EN RUTA",
-                        fecha_ap.strftime(
-                            "%d/%m/%Y"
-                        ),
-                        ""
-                    ]
-
-                    sheet_despacho_asn.append_row(
-                        fila_asn
+                    asn_sel = st.selectbox(
+                        "ASN",
+                        asns_list
                     )
 
-            st.success(
-                "Despacho creado"
-            )
+                    f_alm = st.date_input(
+                        "Fecha",
+                        date.today(),
+                        key="f_alm"
+                    )
+
+                    if st.form_submit_button(
+                        "Actualizar"
+                    ):
+
+                        if update_recepcion_almacenado(
+                            asn_sel,
+                            f_alm
+                        ):
+
+                            st.success(
+                                "Actualizado"
+                            )
+
+                            st.cache_data.clear()
+
+                            st.rerun()
+
+# =========================================================
+# DISTRIBUCION
+# =========================================================
+
+elif menu == "🚚 Distribución":
+
+    st.title(
+        "🚚 Distribución"
+    )
+
+    st.info(
+        "Módulo en construcción."
+    )
+
+# =========================================================
+# SIDEBAR
+# =========================================================
+
+if st.sidebar.button(
+    "🔄 Sincronizar"
+):
+
+    st.cache_data.clear()
+
+    st.rerun()
