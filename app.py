@@ -1,5 +1,5 @@
 # =========================================================
-# SISTEMA LOGÍSTICO CARCASAS - STREAMLIT CLOUD FINAL
+# SISTEMA LOGÍSTICO CARCASAS - FINAL STREAMLIT CLOUD
 # =========================================================
 
 import streamlit as st
@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import date, datetime, timedelta
 
 # =========================================================
-# CONFIG PAGE
+# CONFIG
 # =========================================================
 
 st.set_page_config(
@@ -27,8 +27,8 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-.stDataFrame {
-    font-size: 12px;
+.stDataFrame{
+    font-size:12px;
 }
 
 .apertura-card{
@@ -56,7 +56,7 @@ st.markdown("""
 .titulo-seccion{
     color:#2d3436;
     font-weight:bold;
-    font-size:1.6em;
+    font-size:1.5rem;
     margin-top:25px;
     margin-bottom:15px;
     border-bottom:3px solid #6c5ce7;
@@ -67,7 +67,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# GOOGLE SHEETS CONNECTION
+# GOOGLE SHEETS
 # =========================================================
 
 @st.cache_resource
@@ -78,7 +78,9 @@ def conectar_google():
         "https://www.googleapis.com/auth/drive"
     ]
 
-    creds_dict = dict(st.secrets["gcp_service_account"])
+    creds_dict = dict(
+        st.secrets["gcp_service_account"]
+    )
 
     creds = ServiceAccountCredentials.from_json_keyfile_dict(
         creds_dict,
@@ -92,7 +94,7 @@ def conectar_google():
 client = conectar_google()
 
 # =========================================================
-# OPEN SHEETS
+# HELPERS
 # =========================================================
 
 def abrir_hoja(nombre_archivo, nombre_hoja=None):
@@ -104,16 +106,15 @@ def abrir_hoja(nombre_archivo, nombre_hoja=None):
 
     return sh.sheet1
 
-# =========================================================
-# LOAD DATA
-# =========================================================
-
 @st.cache_data(ttl=60)
 def cargar_df(nombre_archivo, hoja=None):
 
     try:
 
-        sheet = abrir_hoja(nombre_archivo, hoja)
+        sheet = abrir_hoja(
+            nombre_archivo,
+            hoja
+        )
 
         data = sheet.get_all_records()
 
@@ -126,14 +127,16 @@ def cargar_df(nombre_archivo, hoja=None):
                 for c in df.columns
             ]
 
-        return df.astype(str)
+            df = df.astype(str)
+
+        return df
 
     except:
 
         return pd.DataFrame()
 
 # =========================================================
-# UPDATE FUNCTIONS
+# UPDATE ARRIBO
 # =========================================================
 
 def update_consolidado_arribo(doc, fecha):
@@ -244,7 +247,7 @@ def update_recepcion_almacenado(asn, fecha):
         return False
 
 # =========================================================
-# LOAD TABLES
+# LOAD DATA
 # =========================================================
 
 with st.spinner("Sincronizando con Google Sheets..."):
@@ -263,7 +266,7 @@ with st.spinner("Sincronizando con Google Sheets..."):
     )
 
 # =========================================================
-# SIDEBAR
+# MENU
 # =========================================================
 
 menu = st.sidebar.radio(
@@ -366,7 +369,7 @@ if menu == "📦 Importaciones":
                 st.error(e)
 
         # =================================================
-        # STATUS IMPORTACIONES
+        # STATUS
         # =================================================
 
         st.markdown(
@@ -410,10 +413,6 @@ if menu == "📦 Importaciones":
 
             c1, c2 = st.columns(2)
 
-            # =============================================
-            # PENDIENTES
-            # =============================================
-
             with c1:
 
                 st.markdown(
@@ -445,10 +444,6 @@ if menu == "📦 Importaciones":
                         width="stretch",
                         hide_index=True
                     )
-
-            # =============================================
-            # ARRIBADOS
-            # =============================================
 
             with c2:
 
@@ -491,20 +486,20 @@ if menu == "📦 Importaciones":
     with tab_recep:
 
         st.markdown(
-            "### 🗺️ Flujo Recepción"
+            "### 🗺️ Flujo de Recepción"
         )
 
-        col_p, col_a, col_t = st.columns(3)
+        col1, col2, col3 = st.columns(3)
 
         # =================================================
         # PENDIENTE
         # =================================================
 
-        with col_p:
+        with col1:
 
             st.markdown("""
             <div style="
-                background-color:#f8f9fa;
+                background:#fff5f5;
                 padding:15px;
                 border-radius:10px;
                 border-left:5px solid #ff4b4b;
@@ -546,11 +541,11 @@ if menu == "📦 Importaciones":
         # ALMACENADO
         # =================================================
 
-        with col_a:
+        with col2:
 
             st.markdown("""
             <div style="
-                background-color:#f0fff4;
+                background:#f0fff4;
                 padding:15px;
                 border-radius:10px;
                 border-left:5px solid #28a745;
@@ -592,11 +587,11 @@ if menu == "📦 Importaciones":
         # PROGRAMADO
         # =================================================
 
-        with col_t:
+        with col3:
 
             st.markdown("""
             <div style="
-                background-color:#fffaf0;
+                background:#fffaf0;
                 padding:15px;
                 border-radius:10px;
                 border-left:5px solid #ffa500;
@@ -708,12 +703,6 @@ if menu == "📦 Importaciones":
 
                             st.rerun()
 
-            else:
-
-                st.info(
-                    "Sin documentos pendientes"
-                )
-
         # =================================================
         # ALMACENADO
         # =================================================
@@ -742,7 +731,7 @@ if menu == "📦 Importaciones":
             if asns:
 
                 with st.form(
-                    "form_almacen"
+                    "form_alm"
                 ):
 
                     asn_sel = st.selectbox(
@@ -751,7 +740,7 @@ if menu == "📦 Importaciones":
                     )
 
                     fecha = st.date_input(
-                        "Fecha",
+                        "Fecha Almacenado",
                         date.today()
                     )
 
@@ -769,18 +758,12 @@ if menu == "📦 Importaciones":
                         if ok:
 
                             st.success(
-                                "ASN almacenado"
+                                "ASN actualizado"
                             )
 
                             st.cache_data.clear()
 
                             st.rerun()
-
-            else:
-
-                st.info(
-                    "Sin ASN pendientes"
-                )
 
 # =========================================================
 # DISTRIBUCION
@@ -795,7 +778,7 @@ elif menu == "🚚 Distribución":
     )
 
 # =========================================================
-# SIDEBAR SYNC
+# SIDEBAR REFRESH
 # =========================================================
 
 if st.sidebar.button(
