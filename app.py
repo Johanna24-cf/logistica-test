@@ -1,5 +1,5 @@
 # =========================================================
-# SISTEMA LOGÍSTICO CARCASAS - VERSIÓN FINAL ULTRA-OPTIMIZADA
+# SISTEMA LOGÍSTICO CARCASAS - VERSIÓN FINAL (LÓGICA APERTURA)
 # =========================================================
 
 import streamlit as st
@@ -20,9 +20,6 @@ st.markdown("""
         border-left: 6px solid #6c5ce7; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         margin-bottom: 15px; min-height: 140px;
     }
-    .tienda-titulo { color: #2d3436; font-size: 1.1em; font-weight: 700; }
-    .desc-tienda { color: #636e72; font-size: 0.85em; }
-    .fecha-est { color: #d63031; font-weight: bold; font-size: 0.9em; margin-top: 10px; }
     .titulo-seccion {
         color: #2d3436; font-weight: bold; font-size: 1.5rem;
         margin-top: 25px; margin-bottom: 15px;
@@ -58,34 +55,33 @@ def cargar_df(nombre_archivo, hoja=None):
         return df.astype(str)
     return pd.DataFrame()
 
-# 4. FUNCIONES DE ACTUALIZACIÓN (BATCH UPDATE PARA EVITAR ERROR 429)
+# 4. FUNCIONES DE ACTUALIZACIÓN (CON LÓGICA DE ESCANEO X1-X9)
 def update_consolidado_arribo(doc, fecha):
     try:
         # A. PROCESAR CONSOLIDADO
         sh_cons = client.open("Consolidado - Carcasas")
         wks_cons = sh_cons.sheet1
-        data_cons = wks_cons.get_all_records()
-        df_cons = pd.DataFrame(data_cons)
+        all_values = wks_cons.get_all_values()
+        
+        # Crear DF temporal para encontrar los índices
+        df_cons = pd.DataFrame(all_values[1:], columns=all_values[0])
         df_cons.columns = [str(c).strip().upper() for c in df_cons.columns]
         
         mask = df_cons["DOC"].astype(str) == str(doc)
         indices = df_cons[mask].index
         if len(indices) == 0: return False
 
-        # Identificar columnas
         col_status_idx = df_cons.columns.get_loc("STATUS")
         col_fecha_idx = df_cons.columns.get_loc("FCH LLEGADA")
 
-        # B. ACTUALIZACIÓN MASIVA EN CONSOLIDADO (Rango completo)
-        # Obtenemos todos los valores actuales, modificamos en memoria y subimos TODO el rango
-        all_values = wks_cons.get_all_values()
+        # B. ACTUALIZACIÓN MASIVA STATUS CONSOLIDADO
         for idx in indices:
             all_values[idx + 1][col_status_idx] = "ARRIBADO"
             all_values[idx + 1][col_fecha_idx] = str(fecha)
         
-        wks_cons.update('A1', all_values) # Una sola petición de escritura para todo el sheet
+        wks_cons.update('A1', all_values)
 
-        # C. TRASPASO MASIVO A RECEPCIÓN
+        # C. TRASPASO A RECEPCIÓN CON LÓGICA X1-X9
         sh_rec = client.open("RECEPCION_IMPORTACIONES")
         wks_mov = sh_rec.worksheet("MOVIMIENTOS")
         
@@ -94,7 +90,23 @@ def update_consolidado_arribo(doc, fecha):
         
         for _, fila in filas_traspaso.iterrows():
             tienda_val = str(fila.get("TIENDA", "")).strip()
-            dest, proc = ("ALMACENAJE", "POR ALMACENAR") if tienda_val == "4298" else ("TIENDA", "POR DISTRIBUIR")
+            
+            # --- NUEVA LÓGICA DE PROCESO ---
+            if tienda_val == "4298":
+                destino_final = "ALMACENAJE"
+                proceso_final = "POR ALMACENAR"
+            else:
+                destino_final = "TIENDA"
+                # Escanear columnas X1 a X9
+                columnas_x = [f"X{i}" for i in range(1, 10)]
+                encontro_apertura = False
+                for col in columnas_x:
+                    contenido = str(fila.get(col, "")).upper()
+                    if "APERTURA" in contenido:
+                        encontro_apertura = True
+                        break
+                
+                proceso_final = "APERTURA" if encontro_apertura else "POR DISTRIBUIR"
             
             lista_bulk.append([
                 fila.get("ID_DESPACHO", fila.get("ID", "")), # A
@@ -105,15 +117,15 @@ def update_consolidado_arribo(doc, fecha):
                 "Pendiente",                                 # F
                 str(fecha),                                  # G
                 fila.get("ETA", ""),                         # H
-                dest,                                        # I
-                proc,                                        # J
+                destino_final,                               # I
+                proceso_final,                               # J
                 ""                                           # K
             ])
         
-        wks_mov.append_rows(lista_bulk) # Una sola petición de escritura
+        wks_mov.append_rows(lista_bulk)
         return True
     except Exception as e:
-        st.error(f"Error de Cuota: {e}")
+        st.error(f"Error de Cuota/Lógica: {e}")
         return False
 
 def update_recepcion_almacenado(asn, fecha):
@@ -122,15 +134,12 @@ def update_recepcion_almacenado(asn, fecha):
         all_data = sheet.get_all_values()
         df = pd.DataFrame(all_data[1:], columns=all_data[0])
         df.columns = [str(c).strip().upper() for c in df.columns]
-        
         indices = df[df["ASN"].astype(str) == str(asn)].index
         col_status_idx = df.columns.get_loc("STATUS_REC")
         col_fecha_idx = df.columns.get_loc("FCH_ALMACENADO") if "FCH_ALMACENADO" in df.columns else 11
-        
         for idx in indices:
             all_data[idx + 1][col_status_idx] = "ALMACENADO"
             all_data[idx + 1][col_fecha_idx] = str(fecha)
-            
         sheet.update('A1', all_data)
         return True
     except: return False
