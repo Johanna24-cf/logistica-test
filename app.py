@@ -204,7 +204,7 @@ if menu == "📦 Importaciones":
         if not df_recepcion.empty:
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.markdown('<div style="background:#fff5f5;padding:10px;border-radius:10px;border-left:5px solid #ff4b4b;"><h4>🚨 POR ALMACENAR</h4></div>', unsafe_allow_html=True)
+                st.markdown('<div style="background:#fff5f5;padding:10px;border-radius:10px;border-left:5px solid #ff4b4b;"><h4>🚨 PENDIENTE</h4></div>', unsafe_allow_html=True)
                 df_p_rec = df_recepcion[df_recepcion["STATUS_REC"].str.upper() == "PENDIENTE"]
                 if not df_p_rec.empty: st.dataframe(df_p_rec.groupby(["IMPORTACION", "DESTINO", "PROCESO"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
             with col2:
