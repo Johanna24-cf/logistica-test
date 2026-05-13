@@ -109,7 +109,7 @@ menu = st.sidebar.radio("MENÚ PRINCIPAL", ["📦 Importaciones", "🚚 Distribu
 
 if menu == "📦 Importaciones":
     st.title("📦 Gestión de Importaciones")
-    tab_dash, tab_recep, tab_ops = st.tabs(["📊 Dashboard", "📑 Recepción", "⚙️ Operaciones"])
+    tab_dash, tab_recep, tab_ops = st.tabs(["📊 Dash Importacion", "📑 Dash Recepción", "⚙️ Operaciones"])
 
     with tab_dash:
         st.subheader("🏪 Próximas Aperturas")
@@ -140,7 +140,7 @@ if menu == "📦 Importaciones":
             m1, m2, m3 = st.columns(3)
             total = df_import["DOC"].nunique()
             arr = df_import[df_import["STATUS"].str.upper().str.contains("ARRIBADO", na=False)]["DOC"].nunique()
-            m1.metric("Total DOCs", total)
+            m1.metric("Total Importaciones", total)
             m2.metric("Arribados", arr)
             m3.metric("En Tránsito", total - arr)
             
@@ -150,12 +150,12 @@ if menu == "📦 Importaciones":
                 st.markdown("### ⏳ Pendientes")
                 df_p = df_import[~df_import["STATUS"].str.upper().str.contains("ARRIBADO", na=False)]
                 if not df_p.empty:
-                    st.dataframe(df_p.groupby("DOC").size().reset_index(name="ASNs"), width="stretch", hide_index=True)
+                    st.dataframe(df_p.groupby(["DOC", "ETA"]).size().reset_index(name="ASNs"), width="stretch", hide_index=True)
             with c2:
                 st.markdown("### ✅ Arribados")
                 df_a = df_import[df_import["STATUS"].str.upper().str.contains("ARRIBADO", na=False)]
                 if not df_a.empty:
-                    st.dataframe(df_a.groupby(["DOC", "ETA"]).size().reset_index(name="ASNs"), width="stretch", hide_index=True)
+                    st.dataframe(df_a.groupby(["DOC", "FCH LLEGADA"]).size().reset_index(name="ASNs"), width="stretch", hide_index=True)
 
     with tab_recep:
         st.markdown("### 🗺️ Flujo de Recepción")
