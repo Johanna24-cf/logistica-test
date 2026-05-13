@@ -23,21 +23,12 @@ scope = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-try:
+creds_dict = dict(st.secrets["gcp_service_account"])
 
-    creds_dict = dict(st.secrets["gcp_service_account"])
-
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(
-        creds_dict,
-        scope
-    )
-
-except:
-
-    creds = ServiceAccountCredentials.from_json_keyfile_name(
-        "credenciales.json",
-        scope
-    )
+creds = ServiceAccountCredentials.from_json_keyfile_dict(
+    creds_dict,
+    scope
+)
 
 client = gspread.authorize(creds)
 
