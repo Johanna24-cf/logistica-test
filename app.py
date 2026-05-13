@@ -141,7 +141,7 @@ if menu == "📦 Importaciones":
             arr = df_import[df_import["STATUS"].str.upper().str.contains("ARRIBADO", na=False)]["DOC"].nunique()
             m1.metric("Total Importaciones", total)
             m2.metric("Arribados", arr)
-            m3.metric("En Tránsito", total - arr)
+            m3.metric("Pendientes", total - arr)
             
             st.divider()
             c1, c2 = st.columns(2)
@@ -150,7 +150,7 @@ if menu == "📦 Importaciones":
                 df_p = df_import[~df_import["STATUS"].str.upper().str.contains("ARRIBADO", na=False)]
                 if not df_p.empty:
                     # Agrupamos solo por columnas que sabemos que existen
-                    cols_p = [c for c in ["DOC", "ETA"] if c in df_p.columns]
+                    cols_p = [c for c in ["DOC", "ETA","STATUS"] if c in df_p.columns]
                     st.dataframe(df_p.groupby(cols_p).size().reset_index(name="CANT_ASN"), width="stretch", hide_index=True)
             with c2:
                 st.markdown("### ✅ Arribados")
@@ -168,7 +168,7 @@ if menu == "📦 Importaciones":
                 st.markdown('<div style="background:#fff5f5;padding:10px;border-radius:10px;border-left:5px solid #ff4b4b;"><h4>🚨 PENDIENTE</h4></div>', unsafe_allow_html=True)
                 df_p_rec = df_recepcion[df_recepcion["STATUS_REC"].str.upper() == "PENDIENTE"]
                 if not df_p_rec.empty:
-                    st.dataframe(df_p_rec.groupby(["IMPORTACION", "DESTINO"]).size().reset_index(name="ASNs"), width="stretch", hide_index=True)
+                    st.dataframe(df_p_rec.groupby(["IMPORTACION", "DESTINO","PROCESO"]).size().reset_index(name="ASNs"), width="stretch", hide_index=True)
             with col2:
                 st.markdown('<div style="background:#f0fff4;padding:10px;border-radius:10px;border-left:5px solid #28a745;"><h4>🏢 ALMACENADO</h4></div>', unsafe_allow_html=True)
                 df_alm = df_recepcion[df_recepcion["STATUS_REC"].str.upper() == "ALMACENADO"]
@@ -180,7 +180,7 @@ if menu == "📦 Importaciones":
                 if not df_prog.empty:
                     # Cambié ID_DESPACHO por una columna común si no existe
                     col_id = "ID_DESPACHO" if "ID_DESPACHO" in df_prog.columns else "DESTINO"
-                    st.dataframe(df_prog.groupby(["IMPORTACION", col_id]).size().reset_index(name="ASNs"), width="stretch", hide_index=True)
+                    st.dataframe(df_prog.groupby(["FECHA ENTREGA","IMPORTACION", col_id]).size().reset_index(name="ASNs"), width="stretch", hide_index=True)
         else: st.warning("No hay datos en Recepción.")
 
     with tab_ops:
