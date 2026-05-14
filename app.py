@@ -1,5 +1,5 @@
 # =========================================================
-# SISTEMA LOGÍSTICO CARCASAS - VERSIÓN ULTRA-OPTIMIZADA
+# SISTEMA LOGÍSTICO CARCASAS - VERSIÓN FINAL INTEGRAL
 # =========================================================
 
 import streamlit as st
@@ -7,25 +7,25 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import date, datetime, timedelta
+import os
 
-# 1. CONFIGURACIÓN INICIAL
+# 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(
     page_title="Sistema Logístico Carcasas",
     page_icon="📦",
     layout="wide"
 )
 
-# Carga de Logo (Cacheada para no ralentizar el inicio)
+# 2. LOGO Y ESTILOS
 @st.cache_data
 def mostrar_logo():
-    try:
+    if os.path.exists("CARCASAS.png"):
         st.image("CARCASAS.png", width=250)
-    except:
-        pass
+    else:
+        st.info("Logo CARCASAS.png no encontrado en el repositorio.")
 
 mostrar_logo()
 
-# 2. ESTILOS CSS
 st.markdown("""
     <style>
     .stDataFrame { font-size: 12px; }
@@ -45,17 +45,21 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. CONEXIÓN Y CARGA EFICIENTE
+# 3. CONEXIÓN A GOOGLE SHEETS
 @st.cache_resource
 def conectar_google():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds_dict = dict(st.secrets["gcp_service_account"])
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    return gspread.authorize(creds)
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        return gspread.authorize(creds)
+    except Exception as e:
+        st.error(f"Error de conexión: {e}")
+        return None
 
 client = conectar_google()
 
-@st.cache_data(ttl=300) # Aumentamos a 5 min para mayor fluidez, se puede forzar con el botón Sync
+@st.cache_data(ttl=300)
 def cargar_datos_completos():
     def fetch(nombre, hoja=None):
         try:
@@ -68,7 +72,7 @@ def cargar_datos_completos():
     
     return fetch("Consolidado - Carcasas"), fetch("RECEPCION_IMPORTACIONES", "MOVIMIENTOS"), fetch("TIENDAS CARCASAS")
 
-# 4. LÓGICA DE ACTUALIZACIÓN OPTIMIZADA
+# 4. FUNCIONES DE PROCESAMIENTO
 def update_consolidado_arribo(doc, fecha):
     try:
         sh_cons = client.open("Consolidado - Carcasas")
@@ -83,21 +87,20 @@ def update_consolidado_arribo(doc, fecha):
         col_status_idx = header.index("STATUS")
         col_fecha_idx = header.index("FCH LLEGADA")
 
-        # Actualización en memoria (Rápido)
         for idx in indices:
             all_values[idx + 1][col_status_idx] = "ARRIBADO"
             all_values[idx + 1][col_fecha_idx] = str(fecha)
         
-        # Una sola escritura masiva
         wks_cons.update('A1', all_values)
 
-        # Traspaso a Recepción
+        # Traspaso con Lógica de Negocio
         sh_rec = client.open("RECEPCION_IMPORTACIONES")
         wks_mov = sh_rec.worksheet("MOVIMIENTOS")
         
         lista_bulk = []
         for _, fila in df_temp[mask].iterrows():
             tienda = str(fila.get("TIENDA", "")).strip()
+            # REGLA 4298 vs APERTURA
             if tienda == "4298":
                 dest, proc = "ALMACENAJE", "POR ALMACENAR"
             else:
@@ -115,12 +118,13 @@ def update_consolidado_arribo(doc, fecha):
         wks_mov.append_rows(lista_bulk)
         return True
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error técnico: {e}")
         return False
 
-# 5. UI PRINCIPAL
-df_import, df_recepcion, df_tiendas = cargar_datos_completos()
+# 5. CARGA INICIAL
+df_import, df_recep, df_tiendas = cargar_datos_completos()
 
+# 6. INTERFAZ DE USUARIO
 st.title("📦 Gestión de Importaciones")
 menu = st.sidebar.radio("MENÚ PRINCIPAL", ["📦 Importaciones", "🚚 Distribución"])
 
@@ -128,86 +132,115 @@ if menu == "📦 Importaciones":
     tab_dash, tab_recep, tab_ops = st.tabs(["📊 Dash Importacion", "📑 Dash Recepción", "⚙️ Operaciones"])
 
     with tab_dash:
-        # --- SECCIÓN APERTURAS ---
+        st.subheader("🏪 Próximas Aperturas")
         if not df_tiendas.empty:
-            df_ap = df_tiendas[df_tiendas["ESTADO"].str.upper().str.contains("PENDIENTE", na=False)].copy()
-            df_ap["FCH_DT"] = pd.to_datetime(df_ap["FCH ESTIMADA"], dayfirst=True, errors='coerce')
-            df_filtrado = df_ap[df_ap["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
-            cols = st.columns(4)
-            for i, (_, row) in enumerate(df_filtrado.iterrows()):
-                with cols[i % 4]:
-                    st.markdown(f'<div class="apertura-card"><div class="tienda-titulo">🏪 {row["TIENDA"]}</div><div class="desc-tienda">{row["DESCRIPCION"]}</div><div class="fecha-est">📅 {row.get("FCH ESTIMADA","")}</div></div>', unsafe_allow_html=True)
+            try:
+                df_ap = df_tiendas[df_tiendas["ESTADO"].str.upper().str.contains("PENDIENTE", na=False)].copy()
+                df_ap["FCH_DT"] = pd.to_datetime(df_ap["FCH ESTIMADA"], dayfirst=True, errors='coerce')
+                df_filtrado = df_ap[df_ap["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
+                cols = st.columns(4)
+                for i, (_, row) in enumerate(df_filtrado.iterrows()):
+                    with cols[i % 4]:
+                        st.markdown(f'''<div class="apertura-card">
+                            <div class="tienda-titulo">🏪 {row["TIENDA"]}</div>
+                            <div class="desc-tienda">{row["DESCRIPCION"]}</div>
+                            <div class="fecha-est">📅 {row.get("FCH ESTIMADA","")}</div>
+                        </div>''', unsafe_allow_html=True)
+            except: pass
 
         st.markdown('<div class="titulo-seccion">STATUS GLOBAL</div>', unsafe_allow_html=True)
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Total Docs", df_import["DOC"].nunique() if not df_import.empty else 0)
-        arr_count = df_import[df_import["STATUS"].str.upper() == "ARRIBADO"]["DOC"].nunique() if not df_import.empty else 0
-        m2.metric("Arribados", arr_count)
-        m3.metric("En Tránsito", (df_import["DOC"].nunique() - arr_count) if not df_import.empty else 0)
-        
-        st.divider()
-        c1, c2 = st.columns(2)
-        with c1:
-            st.write("### ⏳ Pendientes")
-            if not df_import.empty:
-                st.dataframe(df_import[df_import["STATUS"] != "ARRIBADO"].groupby(["DOC", "ETA", "STATUS"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
-        with c2:
-            st.write("### ✅ Arribados")
-            if not df_import.empty:
-                st.dataframe(df_import[df_import["STATUS"] == "ARRIBADO"].groupby(["DOC", "FCH LLEGADA"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
+        if not df_import.empty:
+            m1, m2, m3 = st.columns(3)
+            total_docs = df_import["DOC"].nunique()
+            arr_docs = df_import[df_import["STATUS"] == "ARRIBADO"]["DOC"].nunique()
+            m1.metric("Total Docs", total_docs)
+            m2.metric("Arribados", arr_docs)
+            m3.metric("En Tránsito", total_docs - arr_docs)
+            
+            st.divider()
+            c1, c2 = st.columns(2)
+            with c1:
+                st.write("### ⏳ Pendientes")
+                df_p = df_import[df_import["STATUS"] != "ARRIBADO"]
+                if not df_p.empty:
+                    st.dataframe(df_p.groupby(["DOC", "ETA", "STATUS"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
+            with c2:
+                st.write("### ✅ Arribados")
+                df_a = df_import[df_import["STATUS"] == "ARRIBADO"]
+                if not df_a.empty:
+                    st.dataframe(df_a.groupby(["DOC", "FCH LLEGADA"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
 
     with tab_recep:
         st.markdown("### 🗺️ Dash Recepción")
-        if not df_recepcion.empty:
+        if not df_recep.empty:
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.info("🚨 **PENDIENTE**")
-                st.dataframe(df_recepcion[df_recepcion["STATUS_REC"].str.upper() == "PENDIENTE"].groupby(["IMPORTACION", "DESTINO", "PROCESO"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
+                df_pen = df_recep[df_recep["STATUS_REC"].str.upper() == "PENDIENTE"]
+                if not df_pen.empty:
+                    st.dataframe(df_pen.groupby(["IMPORTACION", "DESTINO", "PROCESO"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
+            
             with col2:
                 st.success("🏢 **EN STOCK**")
-                st.dataframe(df_recepcion[df_recepcion["STATUS_REC"].str.upper() == "ALMACENADO"].groupby(["IMPORTACION", "DESTINO"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
+                df_stock = df_recep[df_recep["STATUS_REC"].str.upper() == "ALMACENADO"]
+                if not df_stock.empty:
+                    st.dataframe(df_stock.groupby(["IMPORTACION", "DESTINO"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
+            
             with col3:
-                st.warning("🚚 **PROGRAMADO**")
-                st.dataframe(df_recepcion[df_recepcion["STATUS_REC"].str.upper() == "PROGRAMADO"].groupby(["FECHA ENTREGA", "IMPORTACION"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
-
-    # --- FRAGMENTO PARA OPERACIONES (EVITA RECARGA TOTAL) ---
-    @st.fragment
-    def seccion_operaciones():
-        st.header("⚙️ Operaciones de Registro")
-        o1, o2 = st.columns(2)
-        with o1:
-            st.subheader("1. Confirmar Arribo")
-            docs_pend = df_import[df_import["STATUS"] != "ARRIBADO"]["DOC"].unique().tolist() if not df_import.empty else []
-            if docs_pend:
-                with st.form("f_arribo", clear_on_submit=True):
-                    d_sel = st.selectbox("Seleccione DOC", docs_pend)
-                    f_sel = st.date_input("Fecha Real", date.today())
-                    if st.form_submit_button("Confirmar Arribo Masivo"):
-                        with st.spinner("Procesando..."):
-                            if update_consolidado_arribo(d_sel, f_sel):
-                                st.success("¡Listo!")
-                                st.cache_data.clear()
-                                st.rerun()
-        with o2:
-            st.subheader("2. Confirmar Almacenaje")
-            if not df_recepcion.empty:
-                asns_pend = df_recepcion[df_recepcion["STATUS_REC"].str.upper() == "PENDIENTE"]["ASN"].unique().tolist()
-                if asns_pend:
-                    with st.form("f_alm", clear_on_submit=True):
-                        a_sel = st.selectbox("ASN", asns_pend)
-                        fa_sel = st.date_input("Fecha Almacenaje", date.today())
-                        if st.form_submit_button("Confirmar Stock"):
-                            # Usamos la misma lógica de batch update para rapidez
-                            sh_r = client.open("RECEPCION_IMPORTACIONES")
-                            w_m = sh_r.worksheet("MOVIMIENTOS")
-                            vals = w_m.get_all_values()
-                            # ... (lógica de actualización igual a la anterior pero masiva)
-                            st.cache_data.clear()
-                            st.rerun()
+                st.warning("🚚 **PROGRAMADO / ENTREGADO**")
+                # Lógica: Mostrar Programados y Entregados juntos
+                df_prog_ent = df_recep[df_recep["STATUS_REC"].str.upper().isin(["PROGRAMADO", "ENTREGADO"])]
+                if not df_prog_ent.empty:
+                    df_res = df_prog_ent.groupby(["FECHA ENTREGA", "IMPORTACION","STATUS_REC"]).size().reset_index(name="BULTOS")
+                    st.dataframe(df_res, use_container_width=True, hide_index=True)
+                else:
+                    st.write("No hay registros.")
 
     with tab_ops:
-        seccion_operaciones()
+        st.header("⚙️ Operaciones")
+        # Fragmento para agilizar la UI
+        @st.fragment
+        def ops_panel():
+            o1, o2 = st.columns(2)
+            with o1:
+                st.subheader("Confirmar Arribo")
+                docs = df_import[df_import["STATUS"] != "ARRIBADO"]["DOC"].unique().tolist() if not df_import.empty else []
+                if docs:
+                    with st.form("arribo_f", clear_on_submit=True):
+                        d = st.selectbox("Documento", docs)
+                        f = st.date_input("Fecha LLegada", date.today())
+                        if st.form_submit_button("Registrar Arribo"):
+                            if update_consolidado_arribo(d, f):
+                                st.success("Registrado correctamente")
+                                st.cache_data.clear()
+                                st.rerun()
+            with o2:
+                st.subheader("Confirmar Stock")
+                if not df_recep.empty:
+                    asns = df_recep[df_recep["STATUS_REC"].str.upper() == "PENDIENTE"]["ASN"].unique().tolist()
+                    if asns:
+                        with st.form("stock_f", clear_on_submit=True):
+                            a = st.selectbox("ASN", asns)
+                            fs = st.date_input("Fecha Stock", date.today())
+                            if st.form_submit_button("Confirmar Ingreso"):
+                                # Lógica rápida de actualización de stock
+                                try:
+                                    sh_r = client.open("RECEPCION_IMPORTACIONES")
+                                    w_m = sh_r.worksheet("MOVIMIENTOS")
+                                    data = w_m.get_all_values()
+                                    header = [c.upper() for c in data[0]]
+                                    idx_asn = header.index("ASN")
+                                    idx_st = header.index("STATUS_REC")
+                                    for i, row in enumerate(data):
+                                        if row[idx_asn] == str(a):
+                                            data[i][idx_st] = "ALMACENADO"
+                                    w_m.update('A1', data)
+                                    st.success("Stock actualizado")
+                                    st.cache_data.clear()
+                                    st.rerun()
+                                except: st.error("Error al actualizar")
+        ops_panel()
 
-if st.sidebar.button("🔄 Sincronizar"):
+if st.sidebar.button("🔄 Sincronizar Todo"):
     st.cache_data.clear()
     st.rerun()
