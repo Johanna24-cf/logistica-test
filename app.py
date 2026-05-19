@@ -1,5 +1,5 @@
 # =========================================================
-# SISTEMA LOGÍSTICO CARCASAS - VERSIÓN PRO OPTIMIZADA (HORA FECH FIX)
+# SISTEMA LOGÍSTICO CARCASAS - VERSIÓN PRO OPTIMIZADA (RECUENTO=1)
 # =========================================================
 
 import streamlit as st
@@ -70,7 +70,16 @@ def cargar_datos_completos():
             return df.astype(str)
         except: return pd.DataFrame()
     
-    return fetch("Consolidado - Carcasas"), fetch("RECEPCION_IMPORTACIONES", "MOVIMIENTOS"), fetch("TIENDAS CARCASAS")
+    df_import_raw = fetch("Consolidado - Carcasas")
+    
+    # NUEVO FILTRO CRÍTICO: Solo tomar registros donde RECUENTO == 1
+    if not df_import_raw.empty and "RECUENTO" in df_import_raw.columns:
+        # El .astype(str) del fetch hace que el 1 venga como texto "1" o "1.0"
+        df_import_filtered = df_import_raw[df_import_raw["RECUENTO"].isin(["1", "1.0"])].copy()
+    else:
+        df_import_filtered = df_import_raw
+
+    return df_import_filtered, fetch("RECEPCION_IMPORTACIONES", "MOVIMIENTOS"), fetch("TIENDAS CARCASAS")
 
 # 4. FUNCIONES DE PROCESAMIENTO
 def update_consolidado_arribo(doc, fecha):
@@ -84,11 +93,18 @@ def update_consolidado_arribo(doc, fecha):
         col_status = headers.index("STATUS")
         col_fecha = headers.index("FCH LLEGADA")
         
+        # También verificamos RECUENTO aquí para el traspaso de filas si aplica
+        col_recuento = headers.index("RECUENTO") if "RECUENTO" in headers else None
+        
         cells_to_update = []
         filas_para_traspaso = []
         
         for i, row in enumerate(all_data[1:], start=2):
             if row[col_doc] == str(doc):
+                # Validar que cumpla la condición RECUENTO = 1 en la hoja real antes de operar
+                if col_recuento is not None and str(row[col_recuento]).strip() not in ["1", "1.0"]:
+                    continue
+                    
                 cells_to_update.append(gspread.Cell(i, col_status + 1, "ARRIBADO"))
                 cells_to_update.append(gspread.Cell(i, col_fecha + 1, str(fecha)))
                 filas_para_traspaso.append(row)
@@ -109,7 +125,6 @@ def update_consolidado_arribo(doc, fecha):
                                 for j in range(1, 10) if f"X{j}" in headers)
                     proc = "APERTURA" if es_ap else "POR DISTRIBUIR"
                 
-                # Usamos HORA FECH en lugar de ETA para el traspaso de datos
                 col_hora_fech_idx = headers.index("HORA FECH") if "HORA FECH" in headers else 0
                 
                 bulk_data.append([
@@ -153,13 +168,11 @@ if menu == "📦 Importaciones":
 
         st.markdown('<div class="titulo-seccion">STATUS GLOBAL</div>', unsafe_allow_html=True)
         if not df_import.empty:
-            # CAMBIO DETECTADO: Ahora se requiere "HORA FECH" en lugar de "ETA"
             columnas_import_req = ["DOC", "HORA FECH", "STATUS", "FCH LLEGADA"]
             columnas_faltantes = [c for c in columnas_import_req if c not in df_import.columns]
             
             if columnas_faltantes:
                 st.error(f"❌ **Estructura incorrecta en la hoja 'Consolidado - Carcasas':** Falta la(s) columna(s): {', '.join(columnas_faltantes)}")
-                st.info("Asegúrate de que los encabezados del Google Sheets contengan exactamente estas columnas.")
             else:
                 m1, m2, m3 = st.columns(3)
                 total = df_import["DOC"].nunique()
@@ -172,13 +185,12 @@ if menu == "📦 Importaciones":
                 c1, c2 = st.columns(2)
                 with c1:
                     st.write("### ⏳ Pendientes")
-                    # Agrupación corregida con "HORA FECH"
                     st.dataframe(df_import[df_import["STATUS"] != "ARRIBADO"].groupby(["DOC", "HORA FECH", "STATUS"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
                 with c2:
                     st.write("### ✅ Arribados")
                     st.dataframe(df_import[df_import["STATUS"] == "ARRIBADO"].groupby(["DOC", "FCH LLEGADA"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
         else:
-            st.info("ℹ️ La hoja 'Consolidado - Carcasas' está vacía o no se pudo cargar.")
+            st.info("ℹ️ No hay registros con RECUENTO = 1, o la hoja está vacía.")
 
     with tab_recep:
         st.markdown("### 🗺️ Dash Recepción")
