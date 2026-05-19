@@ -52,11 +52,17 @@ def conectar_google():
 
 client = conectar_google()
 
+# Función auxiliar inteligente para abrir por Nombre o por ID (Permite hojas externas)
+def abrir_archivo_dinamico(nombre_o_id):
+    if len(nombre_o_id) > 25:  # Los IDs únicos de Google Sheets suelen ser cadenas largas (+40 caracteres)
+        return client.open_by_key(nombre_o_id)
+    return client.open(nombre_o_id)
+
 @st.cache_data(ttl=600) # 10 minutos de cache para navegación fluida
 def cargar_datos_completos():
-    def fetch(nombre, hoja=None):
+    def fetch(nombre_o_id, hoja=None):
         try:
-            sh = client.open(nombre)
+            sh = abrir_archivo_dinamico(nombre_o_id)
             wks = sh.worksheet(hoja) if hoja else sh.sheet1
             data = wks.get_all_records()
             if not data: return pd.DataFrame()
@@ -64,12 +70,14 @@ def cargar_datos_completos():
             df.columns = [str(c).strip().upper() for c in df.columns]
             return df.astype(str)
         except: return pd.DataFrame()
+    
+    # NOTA: Aquí puedes reemplazar cualquiera de estos nombres por el ID entre comillas de la otra cuenta
     return fetch("Consolidado - Carcasas"), fetch("RECEPCION_IMPORTACIONES", "MOVIMIENTOS"), fetch("TIENDAS CARCASAS")
 
 # 4. FUNCIONES DE PROCESAMIENTO (ACTUALIZACIÓN QUIRÚRGICA)
 def update_consolidado_arribo(doc, fecha):
     try:
-        sh_cons = client.open("Consolidado - Carcasas")
+        sh_cons = abrir_archivo_dinamico("Consolidado - Carcasas")
         wks_cons = sh_cons.sheet1
         all_data = wks_cons.get_all_values()
         headers = [h.upper() for h in all_data[0]]
@@ -94,7 +102,7 @@ def update_consolidado_arribo(doc, fecha):
             wks_cons.update_cells(cells_to_update) # Mucho más rápido que update('A1')
 
             # Traspaso Batch a Recepción
-            sh_rec = client.open("RECEPCION_IMPORTACIONES")
+            sh_rec = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
             wks_mov = sh_rec.worksheet("MOVIMIENTOS")
             
             bulk_data = []
@@ -202,7 +210,7 @@ if menu == "📦 Importaciones":
                         a = st.selectbox("ASN", asns)
                         if st.form_submit_button("Confirmar Ingreso"):
                             try:
-                                sh_r = client.open("RECEPCION_IMPORTACIONES")
+                                sh_r = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
                                 w_m = sh_r.worksheet("MOVIMIENTOS")
                                 cell = w_m.find(str(a))
                                 # Asumiendo que STATUS_REC es la columna 6 (F)
