@@ -1,5 +1,5 @@
 # =========================================================
-# SISTEMA LOGÍSTICO CARCASAS - VERSIÓN PRO OPTIMIZADA
+# SISTEMA LOGÍSTICO CARCASAS - VERSIÓN PRO OPTIMIZADA (HORA FECH FIX)
 # =========================================================
 
 import streamlit as st
@@ -12,7 +12,7 @@ import os
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Sistema Logístico Carcasas", page_icon="📦", layout="wide")
 
-# 2. LOGO Y ESTILOS (Refactorizado para limpieza)
+# 2. LOGO Y ESTILOS
 def cargar_estilos():
     st.markdown("""
         <style>
@@ -40,7 +40,7 @@ def mostrar_logo():
 cargar_estilos()
 mostrar_logo()
 
-# 3. CONEXIÓN Y CARGA (Optimizado con ttl más agresivo)
+# 3. CONEXIÓN Y CARGA
 @st.cache_resource
 def conectar_google():
     try:
@@ -52,13 +52,12 @@ def conectar_google():
 
 client = conectar_google()
 
-# Función auxiliar inteligente para abrir por Nombre o por ID (Permite hojas externas)
 def abrir_archivo_dinamico(nombre_o_id):
-    if len(nombre_o_id) > 25:  # Los IDs únicos de Google Sheets suelen ser cadenas largas (+40 caracteres)
+    if len(nombre_o_id) > 25:
         return client.open_by_key(nombre_o_id)
     return client.open(nombre_o_id)
 
-@st.cache_data(ttl=600) # 10 minutos de cache para navegación fluida
+@st.cache_data(ttl=600)
 def cargar_datos_completos():
     def fetch(nombre_o_id, hoja=None):
         try:
@@ -71,10 +70,9 @@ def cargar_datos_completos():
             return df.astype(str)
         except: return pd.DataFrame()
     
-    # NOTA: Aquí puedes reemplazar cualquiera de estos nombres por el ID entre comillas de la otra cuenta
     return fetch("Consolidado - Carcasas"), fetch("RECEPCION_IMPORTACIONES", "MOVIMIENTOS"), fetch("TIENDAS CARCASAS")
 
-# 4. FUNCIONES DE PROCESAMIENTO (ACTUALIZACIÓN QUIRÚRGICA)
+# 4. FUNCIONES DE PROCESAMIENTO
 def update_consolidado_arribo(doc, fecha):
     try:
         sh_cons = abrir_archivo_dinamico("Consolidado - Carcasas")
@@ -86,42 +84,39 @@ def update_consolidado_arribo(doc, fecha):
         col_status = headers.index("STATUS")
         col_fecha = headers.index("FCH LLEGADA")
         
-        # Encontrar filas y preparar actualización masiva
         cells_to_update = []
         filas_para_traspaso = []
         
         for i, row in enumerate(all_data[1:], start=2):
             if row[col_doc] == str(doc):
-                # Actualizar Status
                 cells_to_update.append(gspread.Cell(i, col_status + 1, "ARRIBADO"))
-                # Actualizar Fecha
                 cells_to_update.append(gspread.Cell(i, col_fecha + 1, str(fecha)))
                 filas_para_traspaso.append(row)
 
         if cells_to_update:
-            wks_cons.update_cells(cells_to_update) # Mucho más rápido que update('A1')
+            wks_cons.update_cells(cells_to_update)
 
-            # Traspaso Batch a Recepción
             sh_rec = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
             wks_mov = sh_rec.worksheet("MOVIMIENTOS")
             
             bulk_data = []
             for row in filas_para_traspaso:
                 tienda = row[headers.index("TIENDA")].strip()
-                # Lógica de destino
                 if tienda == "4298": dest, proc = "ALMACENAJE", "POR ALMACENAR"
                 else:
                     dest = "TIENDA"
-                    # Escaneo rápido de APERTURA en columnas X
                     es_ap = any("APERTURA" in str(row[headers.index(f"X{j}")]).upper() 
                                 for j in range(1, 10) if f"X{j}" in headers)
                     proc = "APERTURA" if es_ap else "POR DISTRIBUIR"
+                
+                # Usamos HORA FECH en lugar de ETA para el traspaso de datos
+                col_hora_fech_idx = headers.index("HORA FECH") if "HORA FECH" in headers else 0
                 
                 bulk_data.append([
                     row[headers.index("ID_DESPACHO")] if "ID_DESPACHO" in headers else row[0], 
                     row[col_doc], row[headers.index("ASN")], tienda, 
                     row[headers.index("CANTIDAD")], "Pendiente", str(fecha), 
-                    row[headers.index("ETA")], dest, proc, ""
+                    row[col_hora_fech_idx], dest, proc, ""
                 ])
             wks_mov.append_rows(bulk_data)
             return True
@@ -140,52 +135,74 @@ if menu == "📦 Importaciones":
     with tab_dash:
         st.subheader("🏪 Próximas Aperturas")
         if not df_tiendas.empty:
-            df_ap = df_tiendas[df_tiendas["ESTADO"].str.upper().str.contains("PENDIENTE", na=False)].copy()
-            df_ap["FCH_DT"] = pd.to_datetime(df_ap["FCH ESTIMADA"], dayfirst=True, errors='coerce')
-            df_filtrado = df_ap[df_ap["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
-            cols = st.columns(4)
-            for i, (_, row) in enumerate(df_filtrado.iterrows()):
-                with cols[i % 4]:
-                    st.markdown(f'''<div class="apertura-card">
-                        <div class="tienda-titulo">🏪 {row["TIENDA"]}</div>
-                        <div class="desc-tienda">{row["DESCRIPCION"]}</div>
-                        <div class="fecha-est">📅 {row.get("FCH ESTIMADA","")}</div>
-                    </div>''', unsafe_allow_html=True)
+            columnas_tiendas_req = ["ESTADO", "FCH ESTIMADA", "TIENDA", "DESCRIPCION"]
+            if all(col in df_tiendas.columns for col in columnas_tiendas_req):
+                df_ap = df_tiendas[df_tiendas["ESTADO"].str.upper().str.contains("PENDIENTE", na=False)].copy()
+                df_ap["FCH_DT"] = pd.to_datetime(df_ap["FCH ESTIMADA"], dayfirst=True, errors='coerce')
+                df_filtrado = df_ap[df_ap["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
+                cols = st.columns(4)
+                for i, (_, row) in enumerate(df_filtrado.iterrows()):
+                    with cols[i % 4]:
+                        st.markdown(f'''<div class="apertura-card">
+                            <div class="tienda-titulo">🏪 {row["TIENDA"]}</div>
+                            <div class="desc-tienda">{row["DESCRIPCION"]}</div>
+                            <div class="fecha-est">📅 {row.get("FCH ESTIMADA","")}</div>
+                        </div>''', unsafe_allow_html=True)
+            else:
+                st.warning("⚠️ Columnas faltantes en 'TIENDAS CARCASAS' (Requiere: ESTADO, FCH ESTIMADA, TIENDA, DESCRIPCION)")
 
         st.markdown('<div class="titulo-seccion">STATUS GLOBAL</div>', unsafe_allow_html=True)
         if not df_import.empty:
-            m1, m2, m3 = st.columns(3)
-            total = df_import["DOC"].nunique()
-            arribados = df_import[df_import["STATUS"] == "ARRIBADO"]["DOC"].nunique()
-            m1.metric("Total Docs", total)
-            m2.metric("Arribados", arribados)
-            m3.metric("En Tránsito", total - arribados)
+            # CAMBIO DETECTADO: Ahora se requiere "HORA FECH" en lugar de "ETA"
+            columnas_import_req = ["DOC", "HORA FECH", "STATUS", "FCH LLEGADA"]
+            columnas_faltantes = [c for c in columnas_import_req if c not in df_import.columns]
             
-            st.divider()
-            c1, c2 = st.columns(2)
-            with c1:
-                st.write("### ⏳ Pendientes")
-                st.dataframe(df_import[df_import["STATUS"] != "ARRIBADO"].groupby(["DOC", "ETA", "STATUS"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
-            with c2:
-                st.write("### ✅ Arribados")
-                st.dataframe(df_import[df_import["STATUS"] == "ARRIBADO"].groupby(["DOC", "FCH LLEGADA"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
+            if columnas_faltantes:
+                st.error(f"❌ **Estructura incorrecta en la hoja 'Consolidado - Carcasas':** Falta la(s) columna(s): {', '.join(columnas_faltantes)}")
+                st.info("Asegúrate de que los encabezados del Google Sheets contengan exactamente estas columnas.")
+            else:
+                m1, m2, m3 = st.columns(3)
+                total = df_import["DOC"].nunique()
+                arribados = df_import[df_import["STATUS"] == "ARRIBADO"]["DOC"].nunique()
+                m1.metric("Total Docs", total)
+                m2.metric("Arribados", arribados)
+                m3.metric("En Tránsito", total - arribados)
+                
+                st.divider()
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.write("### ⏳ Pendientes")
+                    # Agrupación corregida con "HORA FECH"
+                    st.dataframe(df_import[df_import["STATUS"] != "ARRIBADO"].groupby(["DOC", "HORA FECH", "STATUS"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
+                with c2:
+                    st.write("### ✅ Arribados")
+                    st.dataframe(df_import[df_import["STATUS"] == "ARRIBADO"].groupby(["DOC", "FCH LLEGADA"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
+        else:
+            st.info("ℹ️ La hoja 'Consolidado - Carcasas' está vacía o no se pudo cargar.")
 
     with tab_recep:
         st.markdown("### 🗺️ Dash Recepción")
         if not df_recep.empty:
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.info("🚨 **PENDIENTE**")
-                df_p = df_recep[df_recep["STATUS_REC"].str.upper() == "PENDIENTE"]
-                st.dataframe(df_p.groupby(["IMPORTACION", "DESTINO", "PROCESO"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
-            with col2:
-                st.success("🏢 **EN STOCK**")
-                df_s = df_recep[df_recep["STATUS_REC"].str.upper() == "ALMACENADO"]
-                st.dataframe(df_s.groupby(["IMPORTACION", "DESTINO"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
-            with col3:
-                st.warning("🚚 **PROGRAMADO / ENTREGADO**")
-                df_pe = df_recep[df_recep["STATUS_REC"].str.upper().isin(["PROGRAMADO", "ENTREGADO"])]
-                st.dataframe(df_pe.groupby(["FECHA ENTREGA", "IMPORTACION", "STATUS_REC"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
+            columnas_recep_req = ["STATUS_REC", "IMPORTACION", "DESTINO", "PROCESO"]
+            if all(col in df_recep.columns for col in columnas_recep_req):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.info("🚨 **PENDIENTE**")
+                    df_p = df_recep[df_recep["STATUS_REC"].str.upper() == "PENDIENTE"]
+                    if not df_p.empty:
+                        st.dataframe(df_p.groupby(["IMPORTACION", "DESTINO", "PROCESO"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
+                with col2:
+                    st.success("🏢 **EN STOCK**")
+                    df_s = df_recep[df_recep["STATUS_REC"].str.upper() == "ALMACENADO"]
+                    if not df_s.empty:
+                        st.dataframe(df_s.groupby(["IMPORTACION", "DESTINO"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
+                with col3:
+                    st.warning("🚚 **PROGRAMADO / ENTREGADO**")
+                    df_pe = df_recep[df_recep["STATUS_REC"].str.upper().isin(["PROGRAMADO", "ENTREGADO"])]
+                    if not df_pe.empty and "FECHA ENTREGA" in df_recep.columns:
+                        st.dataframe(df_pe.groupby(["FECHA ENTREGA", "IMPORTACION", "STATUS_REC"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
+            else:
+                st.warning("⚠️ Estructura incorrecta en la hoja 'RECEPCION_IMPORTACIONES'.")
 
     with tab_ops:
         st.header("⚙️ Operaciones")
@@ -194,7 +211,10 @@ if menu == "📦 Importaciones":
             o1, o2 = st.columns(2)
             with o1:
                 st.subheader("Confirmar Arribo")
-                docs = df_import[df_import["STATUS"] != "ARRIBADO"]["DOC"].unique().tolist() if not df_import.empty else []
+                docs = df_import["DOC"].unique().tolist() if not df_import.empty and "DOC" in df_import.columns else []
+                if "STATUS" in df_import.columns:
+                    docs = df_import[df_import["STATUS"] != "ARRIBADO"]["DOC"].unique().tolist()
+                
                 with st.form("arribo_f", clear_on_submit=True):
                     d = st.selectbox("Documento", docs)
                     f = st.date_input("Fecha LLegada", date.today())
@@ -204,7 +224,7 @@ if menu == "📦 Importaciones":
                             st.cache_data.clear(); st.rerun()
             with o2:
                 st.subheader("Confirmar Stock")
-                if not df_recep.empty:
+                if not df_recep.empty and "STATUS_REC" in df_recep.columns and "ASN" in df_recep.columns:
                     asns = df_recep[df_recep["STATUS_REC"].str.upper() == "PENDIENTE"]["ASN"].unique().tolist()
                     with st.form("stock_f", clear_on_submit=True):
                         a = st.selectbox("ASN", asns)
@@ -213,7 +233,6 @@ if menu == "📦 Importaciones":
                                 sh_r = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
                                 w_m = sh_r.worksheet("MOVIMIENTOS")
                                 cell = w_m.find(str(a))
-                                # Asumiendo que STATUS_REC es la columna 6 (F)
                                 w_m.update_cell(cell.row, 6, "ALMACENADO")
                                 st.toast("Stock actualizado", icon="🏢")
                                 st.cache_data.clear(); st.rerun()
