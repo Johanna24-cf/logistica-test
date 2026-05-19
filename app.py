@@ -127,7 +127,7 @@ st.title("📦 Gestión de Importaciones")
 menu = st.sidebar.radio("MENÚ PRINCIPAL", ["📦 Importaciones", "🚚 Distribución"])
 
 if menu == "📦 Importaciones":
-    tab_dash, tab_recep, tab_ops = st.tabs(["📊 Dash Importacion", "📑 Dash Recepción", "⚙️ Operaciones"])
+    tab_dash, tab_recep, tab_ops = st.tabs(["📊 Dash Importacion", "📑 Gestión interna", "⚙️ Operaciones"])
 
     with tab_dash:
         st.subheader("🏪 Próximas Aperturas")
