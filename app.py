@@ -89,7 +89,7 @@ def update_consolidado_arribo(doc, fecha):
         all_data = wks_cons.get_all_values()
         headers = [h.upper() for h in all_data[0]]
         
-        col_doc = headers.index("DOC")
+        col_doc = headers.index("NOMBRE CORREO")
         col_status = headers.index("STATUS")
         col_fecha = headers.index("FCH LLEGADA")
         
@@ -168,15 +168,15 @@ if menu == "📦 Importaciones":
 
         st.markdown('<div class="titulo-seccion">STATUS GLOBAL</div>', unsafe_allow_html=True)
         if not df_import.empty:
-            columnas_import_req = ["DOC", "HORA FECH", "STATUS", "FCH LLEGADA"]
+            columnas_import_req = ["NOMBRE CORREO", "HORA FECH", "STATUS", "FCH LLEGADA"]
             columnas_faltantes = [c for c in columnas_import_req if c not in df_import.columns]
             
             if columnas_faltantes:
                 st.error(f"❌ **Estructura incorrecta en la hoja 'Consolidado - Carcasas':** Falta la(s) columna(s): {', '.join(columnas_faltantes)}")
             else:
                 m1, m2, m3 = st.columns(3)
-                total = df_import["DOC"].nunique()
-                arribados = df_import[df_import["STATUS"] == "ARRIBADO"]["DOC"].nunique()
+                total = df_import["NOMBRE CORREO"].nunique()
+                arribados = df_import[df_import["STATUS"] == "ARRIBADO"]["NOMBRE CORREO"].nunique()
                 m1.metric("Total Docs", total)
                 m2.metric("Arribados", arribados)
                 m3.metric("En Tránsito", total - arribados)
@@ -185,10 +185,10 @@ if menu == "📦 Importaciones":
                 c1, c2 = st.columns(2)
                 with c1:
                     st.write("### ⏳ Pendientes")
-                    st.dataframe(df_import[df_import["STATUS"] != "ARRIBADO"].groupby(["DOC", "HORA FECH", "STATUS"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
+                    st.dataframe(df_import[df_import["STATUS"] != "ARRIBADO"].groupby(["NOMBRE CORREO", "HORA FECH", "STATUS"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
                 with c2:
                     st.write("### ✅ Arribados")
-                    st.dataframe(df_import[df_import["STATUS"] == "ARRIBADO"].groupby(["DOC", "FCH LLEGADA"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
+                    st.dataframe(df_import[df_import["STATUS"] == "ARRIBADO"].groupby(["NOMBRE CORREO", "FCH LLEGADA"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
         else:
             st.info("ℹ️ No hay registros con RECUENTO = 1, o la hoja está vacía.")
 
@@ -223,9 +223,9 @@ if menu == "📦 Importaciones":
             o1, o2 = st.columns(2)
             with o1:
                 st.subheader("Confirmar Arribo")
-                docs = df_import["DOC"].unique().tolist() if not df_import.empty and "DOC" in df_import.columns else []
+                docs = df_import["NOMBRE CORREO"].unique().tolist() if not df_import.empty and "NOMBRE CORREO" in df_import.columns else []
                 if "STATUS" in df_import.columns:
-                    docs = df_import[df_import["STATUS"] != "ARRIBADO"]["DOC"].unique().tolist()
+                    docs = df_import[df_import["STATUS"] != "ARRIBADO"]["NOMBRE CORREO"].unique().tolist()
                 
                 with st.form("arribo_f", clear_on_submit=True):
                     d = st.selectbox("Documento", docs)
