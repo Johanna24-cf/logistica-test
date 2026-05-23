@@ -104,11 +104,35 @@ def cargar_despachos():
     try:
         sh = client.open("CONSOLIDADO_DESPACHOS")
         wks = sh.sheet1
-        data = wks.get_all_records()
-        if not data:
+        all_values = wks.get_all_values()
+        if not all_values or len(all_values) < 2:
             return pd.DataFrame()
-        df = pd.DataFrame(data)
-        df.columns = [str(c).strip().lower() for c in df.columns]
+
+        # Usar get_all_values para evitar error por headers vacíos/duplicados
+        raw_headers = all_values[0]
+        rows = all_values[1:]
+
+        # Limpiar headers: renombrar vacíos con _col_N
+        headers = []
+        seen = {}
+        for i, h in enumerate(raw_headers):
+            h_clean = str(h).strip().lower()
+            if h_clean == "":
+                h_clean = f"_col_{i}"
+            if h_clean in seen:
+                seen[h_clean] += 1
+                h_clean = f"{h_clean}_{seen[h_clean]}"
+            else:
+                seen[h_clean] = 0
+            headers.append(h_clean)
+
+        df = pd.DataFrame(rows, columns=headers)
+
+        # Eliminar columnas fantasma (_col_N) que no nos interesan
+        df = df[[c for c in df.columns if not c.startswith("_col_")]]
+
+        # Eliminar filas completamente vacías
+        df = df[df.apply(lambda r: r.str.strip().ne("").any(), axis=1)].reset_index(drop=True)
 
         df["unidades"] = pd.to_numeric(df.get("unidades", 0), errors="coerce").fillna(0).astype(int)
         df["mes"] = df["mes"].astype(str).str.strip().str.upper()
