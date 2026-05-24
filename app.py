@@ -122,15 +122,25 @@ def mostrar_logo_izquierdo():
 
 
 def mostrar_logo_cf_derecha():
-    """Logo CARGOFLEX fijo en esquina superior derecha usando base64 + HTML."""
+    """Logo CARGOFLEX alineado a la derecha, misma altura que logo izquierdo."""
     nombre = "CARGOFLEX.png"
     if os.path.exists(nombre):
         with open(nombre, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
         st.markdown(
-            f'<div class="logo-cf-fixed">'
-            f'<img src="data:image/png;base64,{b64}" width="170">'
-            f'</div>',
+            f'''<div style="
+                position: fixed;
+                top: 80px;
+                right: 32px;
+                z-index: 99999;
+                background: transparent;
+            ">
+                <img src="data:image/png;base64,{b64}"
+                     width="250"
+                     style="image-rendering: -webkit-optimize-contrast;
+                            image-rendering: crisp-edges;
+                            max-width: 250px;">
+            </div>''',
             unsafe_allow_html=True,
         )
 
