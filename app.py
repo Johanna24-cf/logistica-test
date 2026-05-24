@@ -8,6 +8,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import date, datetime
 import os
+import base64
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -98,27 +99,45 @@ def cargar_estilos():
         /* Divider */
         hr { border-color: #c8e06a !important; }
 
-        /* Logo CF Supply area */
-        .logo-cf-supply {
-            position: fixed; top: 12px; right: 24px; z-index: 9999;
+        /* Logo CF Supply — fijo esquina superior derecha, encima del header de Streamlit */
+        .logo-cf-fixed {
+            position: fixed;
+            top: 10px;
+            right: 20px;
+            z-index: 99999;
+            background: transparent;
+        }
+        /* Empujar el header de streamlit para que no tape el logo */
+        header[data-testid="stHeader"] {
+            background: rgba(255,255,255,0.95) !important;
         }
         </style>
         """, unsafe_allow_html=True)
 
-@st.cache_data
-def mostrar_logo():
-    # Logo izquierdo (CARCASAS)
+
+def mostrar_logo_izquierdo():
+    """Logo CARCASAS en la posición normal (izquierda, flujo normal)."""
     if os.path.exists("CARCASAS.png"):
         st.image("CARCASAS.png", width=250)
 
-def mostrar_logo_cf():
-    # Logo CF Supply: esquina superior derecha via HTML absoluto
-    if os.path.exists("CARGOFLEX.png"):
-        st.image("CARGOFLEX.png", width=250)
+
+def mostrar_logo_cf_derecha():
+    """Logo CARGOFLEX fijo en esquina superior derecha usando base64 + HTML."""
+    nombre = "CARGOFLEX.png"
+    if os.path.exists(nombre):
+        with open(nombre, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        st.markdown(
+            f'<div class="logo-cf-fixed">'
+            f'<img src="data:image/png;base64,{b64}" width="170">'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
 
 cargar_estilos()
-mostrar_logo()
-mostrar_logo_cf()
+mostrar_logo_izquierdo()
+mostrar_logo_cf_derecha()
 
 # 3. CONEXIÓN Y CARGA
 @st.cache_resource
@@ -167,7 +186,6 @@ def cargar_datos_completos():
 ORDEN_MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
                "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"]
 
-# Paleta verde → amarillo
 COLORES_TIENDAS = [
     "#1a7a4a", "#2d9e6b", "#3dbb7e", "#5dcf96", "#85dcaa",
     "#b5e878", "#cef250", "#e8d44d", "#f0c040", "#f5a623",
@@ -175,10 +193,9 @@ COLORES_TIENDAS = [
     "#6bcf85", "#d4e84a", "#f2d740", "#e8b830", "#c8e06a",
 ]
 
-GREEN_MAIN   = "#2d9e6b"
-YELLOW_MAIN  = "#c8e06a"
-GREEN_DARK   = "#1a7a4a"
-GREEN_LIGHT  = "#85dcaa"
+GREEN_MAIN  = "#2d9e6b"
+GREEN_DARK  = "#1a7a4a"
+GREEN_LIGHT = "#85dcaa"
 
 
 @st.cache_data(ttl=600)
@@ -193,7 +210,6 @@ def cargar_despachos():
         raw_headers = all_values[0]
         rows = all_values[1:]
 
-        # Limpiar headers duplicados / vacíos
         headers = []
         seen = {}
         for i, h in enumerate(raw_headers):
@@ -209,44 +225,25 @@ def cargar_despachos():
             headers.append(h_clean)
 
         df = pd.DataFrame(rows, columns=headers)
-
-        # Normalizar nombres de columna a minúsculas para acceso uniforme
         df.columns = [c.strip().lower() for c in df.columns]
-
-        # Eliminar columnas fantasma
         df = df[[c for c in df.columns if not c.startswith("_col_")]]
-
-        # Eliminar filas vacías
         df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)].reset_index(drop=True)
 
-        # Tipos
         df["unidades"] = pd.to_numeric(df.get("unidades", 0), errors="coerce").fillna(0).astype(int)
 
-        # Normalizar columna mes → MAYÚSCULAS
         col_mes = next((c for c in df.columns if "mes" in c), None)
-        if col_mes:
-            df["mes"] = df[col_mes].astype(str).str.strip().str.upper()
-        else:
-            df["mes"] = "SIN MES"
+        df["mes"] = df[col_mes].astype(str).str.strip().str.upper() if col_mes else "SIN MES"
 
-        # Columna SKU sin punto
         col_sku = next((c for c in df.columns if "codigo_color_sin_punto" in c), None)
-        if col_sku:
-            df["sku"] = df[col_sku].astype(str).str.strip()
-        else:
-            df["sku"] = df.get("codigo_color", pd.Series([""] * len(df))).astype(str).str.strip()
+        df["sku"] = df[col_sku].astype(str).str.strip() if col_sku else df.get("codigo_color", pd.Series([""] * len(df))).astype(str).str.strip()
 
-        # Descripción producto
         col_desc = next((c for c in df.columns if "descripci" in c.lower()), None)
         df["descripcion"] = df[col_desc].astype(str).str.strip() if col_desc else ""
 
-        # Tienda
         df["codigo_departamento"] = df.get("codigo_departamento", pd.Series([""] * len(df))).astype(str).str.strip()
 
         if "nombre_departamento" in df.columns:
-            df["nombre_tienda"] = df["nombre_departamento"].astype(str).str.replace(
-                r"^\d+\.-\s*", "", regex=True
-            ).str.strip()
+            df["nombre_tienda"] = df["nombre_departamento"].astype(str).str.replace(r"^\d+\.-\s*", "", regex=True).str.strip()
             df["nombre_departamento_full"] = df["nombre_departamento"].astype(str).str.strip()
         else:
             df["nombre_tienda"] = df["codigo_departamento"]
@@ -260,42 +257,8 @@ def cargar_despachos():
 
 def _ordenar_meses(df, col="mes"):
     df = df.copy()
-    df["_orden_mes"] = df[col].map(
-        {m: i for i, m in enumerate(ORDEN_MESES)}
-    ).fillna(99)
+    df["_orden_mes"] = df[col].map({m: i for i, m in enumerate(ORDEN_MESES)}).fillna(99)
     return df.sort_values("_orden_mes").drop(columns=["_orden_mes"])
-
-
-def _filtros_sidebar_despachos(df):
-    """Devuelve df filtrado según los filtros en sidebar."""
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🔍 Filtros Despachos")
-
-    # Filtro tienda
-    tiendas_opts = sorted(df["nombre_tienda"].unique().tolist())
-    sel_tiendas = st.sidebar.multiselect(
-        "Tiendas",
-        options=["TODAS"] + tiendas_opts,
-        default=["TODAS"],
-        key="sb_tiendas"
-    )
-
-    # Filtro mes
-    meses_opts = sorted(df["mes"].unique(), key=lambda m: ORDEN_MESES.index(m) if m in ORDEN_MESES else 99)
-    sel_meses = st.sidebar.multiselect(
-        "Meses",
-        options=["TODOS"] + meses_opts,
-        default=["TODOS"],
-        key="sb_meses"
-    )
-
-    df_f = df.copy()
-    if "TODAS" not in sel_tiendas and sel_tiendas:
-        df_f = df_f[df_f["nombre_tienda"].isin(sel_tiendas)]
-    if "TODOS" not in sel_meses and sel_meses:
-        df_f = df_f[df_f["mes"].isin(sel_meses)]
-
-    return df_f
 
 
 def _render_metricas_despachos(df):
@@ -310,28 +273,16 @@ def _render_top10(df, n=10):
     st.markdown('<div class="titulo-seccion">🏆 Top SKUs despachados</div>', unsafe_allow_html=True)
 
     col_f1, col_f2, col_f3 = st.columns(3)
-
     with col_f1:
         tiendas_opts = sorted(df["nombre_tienda"].unique().tolist())
-        sel_t = st.multiselect(
-            "Tienda(s)",
-            options=["TODAS"] + tiendas_opts,
-            default=["TODAS"],
-            key="top10_tienda"
-        )
+        sel_t = st.multiselect("Tienda(s)", options=["TODAS"] + tiendas_opts, default=["TODAS"], key="top10_tienda")
     with col_f2:
         meses_opts = sorted(df["mes"].unique(), key=lambda m: ORDEN_MESES.index(m) if m in ORDEN_MESES else 99)
-        sel_m = st.multiselect(
-            "Mes(es)",
-            options=["TODOS"] + meses_opts,
-            default=["TODOS"],
-            key="top10_mes"
-        )
+        sel_m = st.multiselect("Mes(es)", options=["TODOS"] + meses_opts, default=["TODOS"], key="top10_mes")
     with col_f3:
         n_top = st.selectbox("Mostrar top", options=[5, 10, 15, 20], index=1, key="top10_n")
 
     df_f = df.copy()
-    # CRÍTICO: forzar SKU como string categórico para evitar que plotly lo trate como número
     df_f["sku"] = df_f["sku"].astype(str).str.strip()
 
     if "TODAS" not in sel_t and sel_t:
@@ -339,7 +290,6 @@ def _render_top10(df, n=10):
     if "TODOS" not in sel_m and sel_m:
         df_f = df_f[df_f["mes"].isin(sel_m)]
 
-    # Construir mapa SKU → descripción ANTES de agrupar
     desc_map = df_f.groupby("sku")["descripcion"].first().to_dict()
 
     top = (
@@ -349,62 +299,38 @@ def _render_top10(df, n=10):
         .reset_index()
         .sort_values("unidades", ascending=True)
     )
-    # Mapear descripción ANTES de agregar prefijo
     top["descripcion"] = top["sku"].astype(str).map(desc_map).fillna("Sin descripción")
-    # Agregar prefijo DESPUÉS del mapeo para que Plotly trate el eje Y como categoría
     top["sku"] = "SKU-" + top["sku"].astype(str).str.strip()
 
-    # Escala verde → amarillo
     n_bars = len(top)
-    colores_barra = [
-        f"hsl({int(120 - (i / max(n_bars - 1, 1)) * 60)}, 68%, 42%)"
-        for i in range(n_bars)
-    ]
+    colores_barra = [f"hsl({int(120 - (i / max(n_bars - 1, 1)) * 60)}, 68%, 42%)" for i in range(n_bars)]
 
     fig = go.Figure(go.Bar(
         x=top["unidades"],
-        y=top["sku"],                # eje Y = SKU (único, evita fusiones por descripción duplicada)
+        y=top["sku"],
         orientation="h",
         marker=dict(color=colores_barra),
         text=top["unidades"].apply(lambda v: f"{v:,}"),
         textposition="outside",
         textfont=dict(size=12, color="#2d3436"),
-        # Tooltip: descripción completa + SKU + unidades
         customdata=list(zip(top["descripcion"], top["sku"])),
         hovertemplate=(
             "<b>%{customdata[0]}</b><br>"
             "🔑 SKU: %{customdata[1]}<br>"
-            "📦 Unidades: %{x:,}"
-            "<extra></extra>"
+            "📦 Unidades: %{x:,}<extra></extra>"
         ),
     ))
-
     fig.update_layout(
         height=max(400, n_top * 48),
         margin=dict(l=10, r=90, t=15, b=30),
-        xaxis=dict(
-            showgrid=True,
-            gridcolor="#e8f5ee",
-            title="Unidades",
-            tickfont=dict(size=11),
-        ),
-        yaxis=dict(
-            showgrid=False,
-            title="",
-            tickfont=dict(size=12),
-            automargin=True,
-            type="category",        # CRÍTICO: fuerza eje Y como categoría, no numérico
-            categoryorder="array",
-            categoryarray=top["sku"].tolist(),
-        ),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        font=dict(family="Arial", size=12, color="#2d3436"),
-        bargap=0.35,
+        xaxis=dict(showgrid=True, gridcolor="#e8f5ee", title="Unidades", tickfont=dict(size=11)),
+        yaxis=dict(showgrid=False, title="", tickfont=dict(size=12), automargin=True,
+                   type="category", categoryorder="array", categoryarray=top["sku"].tolist()),
+        plot_bgcolor="white", paper_bgcolor="white",
+        font=dict(family="Arial", size=12, color="#2d3436"), bargap=0.35,
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # Tabla expandible: SKU | Descripción completa | Unidades
     with st.expander("📋 Ver tabla detalle"):
         tabla = top.sort_values("unidades", ascending=False).reset_index(drop=True)
         tabla.index += 1
@@ -417,23 +343,12 @@ def _render_evolutivo(df):
     st.markdown('<div class="titulo-seccion">📈 Evolutivo de despachos por mes</div>', unsafe_allow_html=True)
 
     col_t, col_m = st.columns([2, 2])
-
     with col_t:
         tiendas_disp = sorted(df["nombre_tienda"].unique().tolist())
-        sel_tiendas = st.multiselect(
-            "Tienda(s)",
-            options=["TODAS"] + tiendas_disp,
-            default=["TODAS"],
-            key="evol_tiendas"
-        )
+        sel_tiendas = st.multiselect("Tienda(s)", options=["TODAS"] + tiendas_disp, default=["TODAS"], key="evol_tiendas")
     with col_m:
         meses_disp = sorted(df["mes"].unique(), key=lambda m: ORDEN_MESES.index(m) if m in ORDEN_MESES else 99)
-        sel_meses = st.multiselect(
-            "Mes(es)",
-            options=meses_disp,
-            default=meses_disp,
-            key="evol_meses"
-        )
+        sel_meses = st.multiselect("Mes(es)", options=meses_disp, default=meses_disp, key="evol_meses")
 
     if not sel_meses:
         st.info("Selecciona al menos un mes.")
@@ -445,59 +360,38 @@ def _render_evolutivo(df):
     if sel_meses:
         df_f = df_f[df_f["mes"].isin(sel_meses)]
 
-    # Cuando es "TODAS" → línea total; cuando hay selección → una línea por tienda
     modo_total = "TODAS" in sel_tiendas or not sel_tiendas
-
     fig = go.Figure()
 
     if modo_total:
-        pivot = df_f.groupby("mes")["unidades"].sum().reset_index()
-        pivot = _ordenar_meses(pivot)
+        pivot = _ordenar_meses(df_f.groupby("mes")["unidades"].sum().reset_index())
         fig.add_trace(go.Scatter(
-            x=pivot["mes"],
-            y=pivot["unidades"],
-            mode="lines+markers+text",
-            name="TOTAL",
-            line=dict(color=GREEN_MAIN, width=3),
-            marker=dict(size=10, color=GREEN_MAIN),
-            text=pivot["unidades"].apply(lambda v: f"{v:,}"),
-            textposition="top center",
+            x=pivot["mes"], y=pivot["unidades"],
+            mode="lines+markers+text", name="TOTAL",
+            line=dict(color=GREEN_MAIN, width=3), marker=dict(size=10, color=GREEN_MAIN),
+            text=pivot["unidades"].apply(lambda v: f"{v:,}"), textposition="top center",
             hovertemplate="<b>Total</b><br>Mes: %{x}<br>Unidades: %{y:,}<extra></extra>",
-            fill="tozeroy",
-            fillcolor="rgba(45,158,107,0.12)",
+            fill="tozeroy", fillcolor="rgba(45,158,107,0.12)",
         ))
     else:
-        pivot = (
-            df_f.groupby(["mes", "nombre_tienda"])["unidades"]
-            .sum()
-            .reset_index()
-        )
-        pivot = _ordenar_meses(pivot)
-        tiendas_sel_list = [t for t in sel_tiendas if t != "TODAS"]
-        for i, tienda in enumerate(tiendas_sel_list):
+        pivot = _ordenar_meses(df_f.groupby(["mes", "nombre_tienda"])["unidades"].sum().reset_index())
+        for i, tienda in enumerate([t for t in sel_tiendas if t != "TODAS"]):
             df_t = pivot[pivot["nombre_tienda"] == tienda]
-            if df_t.empty:
-                continue
+            if df_t.empty: continue
             color = COLORES_TIENDAS[i % len(COLORES_TIENDAS)]
             fig.add_trace(go.Scatter(
-                x=df_t["mes"],
-                y=df_t["unidades"],
-                mode="lines+markers+text",
-                name=tienda,
-                line=dict(color=color, width=2.5),
-                marker=dict(size=8, color=color),
-                text=df_t["unidades"].apply(lambda v: f"{v:,}"),
-                textposition="top center",
+                x=df_t["mes"], y=df_t["unidades"],
+                mode="lines+markers+text", name=tienda,
+                line=dict(color=color, width=2.5), marker=dict(size=8, color=color),
+                text=df_t["unidades"].apply(lambda v: f"{v:,}"), textposition="top center",
                 hovertemplate=f"<b>{tienda}</b><br>Mes: %{{x}}<br>Unidades: %{{y:,}}<extra></extra>",
             ))
 
     fig.update_layout(
-        height=420,
-        margin=dict(l=10, r=20, t=20, b=80),
+        height=420, margin=dict(l=10, r=20, t=20, b=80),
         xaxis=dict(showgrid=False, title=""),
         yaxis=dict(showgrid=True, gridcolor="#e8f5ee", title="Unidades"),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
+        plot_bgcolor="white", paper_bgcolor="white",
         font=dict(family="Arial", size=12, color="#2d3436"),
         legend=dict(orientation="h", yanchor="bottom", y=-0.4, xanchor="left", x=0),
         hovermode="x unified",
@@ -511,10 +405,7 @@ def _render_evolutivo(df):
             tabla["Unidades"] = tabla["Unidades"].apply(lambda v: f"{v:,}")
             st.dataframe(tabla, use_container_width=True)
         else:
-            tabla = pivot.pivot_table(
-                index="nombre_tienda", columns="mes", values="unidades",
-                aggfunc="sum", fill_value=0
-            )
+            tabla = pivot.pivot_table(index="nombre_tienda", columns="mes", values="unidades", aggfunc="sum", fill_value=0)
             cols_ord = [m for m in ORDEN_MESES if m in tabla.columns]
             tabla = tabla[cols_ord]
             tabla["TOTAL"] = tabla.sum(axis=1)
@@ -534,16 +425,8 @@ def _render_heatmap(df):
 
     fig = px.imshow(
         tabla,
-        color_continuous_scale=[
-            [0.0,  "#f0faf4"],
-            [0.25, "#85dcaa"],
-            [0.5,  "#3dbb7e"],
-            [0.75, "#c8e06a"],
-            [1.0,  "#e8a020"],
-        ],
-        aspect="auto",
-        text_auto=True,
-        labels=dict(color="Unidades"),
+        color_continuous_scale=[[0.0, "#f0faf4"], [0.25, "#85dcaa"], [0.5, "#3dbb7e"], [0.75, "#c8e06a"], [1.0, "#e8a020"]],
+        aspect="auto", text_auto=True, labels=dict(color="Unidades"),
     )
     fig.update_traces(texttemplate="%{z:,}", textfont_size=11)
     fig.update_layout(
@@ -552,8 +435,7 @@ def _render_heatmap(df):
         coloraxis_showscale=False,
         xaxis=dict(side="top", tickfont=dict(size=11)),
         yaxis=dict(tickfont=dict(size=11)),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
+        plot_bgcolor="white", paper_bgcolor="white",
         font=dict(family="Arial", size=11, color="#2d3436"),
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -561,17 +443,13 @@ def _render_heatmap(df):
 
 def render_dash_despachos():
     df = cargar_despachos()
-
     if df.empty:
         st.warning("⚠️ Sin datos en CONSOLIDADO_DESPACHOS o error de conexión.")
         return
-
-    columnas_req = {"sku", "unidades", "mes"}
-    faltantes = columnas_req - set(df.columns)
+    faltantes = {"sku", "unidades", "mes"} - set(df.columns)
     if faltantes:
         st.error(f"❌ Columnas faltantes en el sheet: {', '.join(faltantes)}")
         return
-
     st.markdown('<div class="titulo-seccion">📊 Dashboard de Despachos</div>', unsafe_allow_html=True)
     _render_metricas_despachos(df)
     st.divider()
@@ -583,7 +461,7 @@ def render_dash_despachos():
 
 
 # =========================================================
-# 4. FUNCIONES DE PROCESAMIENTO (IMPORTACIONES)
+# 4. FUNCIONES DE PROCESAMIENTO
 # =========================================================
 
 def update_consolidado_arribo(doc, fecha):
@@ -593,9 +471,9 @@ def update_consolidado_arribo(doc, fecha):
         all_data = wks_cons.get_all_values()
         headers = [h.upper() for h in all_data[0]]
 
-        col_doc = headers.index("NOMBRE CORREO")
+        col_doc    = headers.index("NOMBRE CORREO")
         col_status = headers.index("STATUS")
-        col_fecha = headers.index("FCH LLEGADA")
+        col_fecha  = headers.index("FCH LLEGADA")
         col_recuento = headers.index("RECUENTO") if "RECUENTO" in headers else None
 
         cells_to_update = []
@@ -611,22 +489,20 @@ def update_consolidado_arribo(doc, fecha):
 
         if cells_to_update:
             wks_cons.update_cells(cells_to_update)
-
-            sh_rec = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
+            sh_rec  = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
             wks_mov = sh_rec.worksheet("MOVIMIENTOS")
 
             bulk_data = []
             for row in filas_para_traspaso:
                 tienda = row[headers.index("TIENDA")].strip()
-                if tienda == "4298": dest, proc = "ALMACENAJE", "POR ALMACENAR"
+                if tienda == "4298":
+                    dest, proc = "ALMACENAJE", "POR ALMACENAR"
                 else:
                     dest = "TIENDA"
                     es_ap = any("APERTURA" in str(row[headers.index(f"X{j}")]).upper()
                                 for j in range(1, 10) if f"X{j}" in headers)
                     proc = "APERTURA" if es_ap else "POR DISTRIBUIR"
-
                 col_hora_fech_idx = headers.index("HORA FECH") if "HORA FECH" in headers else 0
-
                 bulk_data.append([
                     row[headers.index("ID_DESPACHO")] if "ID_DESPACHO" in headers else row[0],
                     row[col_doc], row[headers.index("ASN")], tienda,
@@ -675,7 +551,7 @@ if menu == "📦 Importaciones":
                             <div class="fecha-est">📅 {row.get("FCH ESTIMADA","")}</div>
                         </div>''', unsafe_allow_html=True)
             else:
-                st.warning("⚠️ Columnas faltantes en 'TIENDAS CARCASAS' (Requiere: ESTADO, FCH ESTIMADA, TIENDA, DESCRIPCION)")
+                st.warning("⚠️ Columnas faltantes en 'TIENDAS CARCASAS'")
 
         st.markdown('<div class="titulo-seccion">STATUS GLOBAL</div>', unsafe_allow_html=True)
         if not df_import.empty:
@@ -683,10 +559,10 @@ if menu == "📦 Importaciones":
             columnas_faltantes = [c for c in columnas_import_req if c not in df_import.columns]
 
             if columnas_faltantes:
-                st.error(f"❌ **Estructura incorrecta en la hoja 'Consolidado - Carcasas':** Falta la(s) columna(s): {', '.join(columnas_faltantes)}")
+                st.error(f"❌ Columnas faltantes: {', '.join(columnas_faltantes)}")
             else:
                 m1, m2, m3 = st.columns(3)
-                total = df_import["NOMBRE CORREO"].nunique()
+                total     = df_import["NOMBRE CORREO"].nunique()
                 arribados = df_import[df_import["STATUS"] == "ARRIBADO"]["NOMBRE CORREO"].nunique()
                 m1.metric("Total Docs", total)
                 m2.metric("Arribados", arribados)
@@ -694,6 +570,7 @@ if menu == "📦 Importaciones":
 
                 st.divider()
                 c1, c2 = st.columns(2)
+
                 with c1:
                     st.write("### ⏳ Pendientes")
                     df_pend = (
@@ -702,13 +579,13 @@ if menu == "📦 Importaciones":
                         .size()
                         .reset_index(name="ASNs")
                     )
-                    # Orden: Aduanas → En tránsito → Origen → resto → vacío
                     orden_status = {"ADUANAS": 0, "EN TRÁNSITO": 1, "EN TRANSITO": 1, "ORIGEN": 2}
                     df_pend["_orden"] = df_pend["STATUS"].str.upper().str.strip().map(orden_status).fillna(
                         df_pend["STATUS"].apply(lambda s: 99 if str(s).strip() == "" else 3)
                     )
                     df_pend = df_pend.sort_values("_orden").drop(columns=["_orden"])
                     st.dataframe(df_pend, use_container_width=True, hide_index=True)
+
                 with c2:
                     st.write("### ✅ Arribados")
                     df_arr = (
@@ -717,7 +594,6 @@ if menu == "📦 Importaciones":
                         .size()
                         .reset_index(name="ASNs")
                     )
-                    # Ordenar: fecha más reciente primero, celdas vacías al final
                     df_arr["_fch_dt"] = pd.to_datetime(df_arr["FCH LLEGADA"], errors="coerce")
                     df_arr = df_arr.sort_values("_fch_dt", ascending=False, na_position="last").drop(columns=["_fch_dt"])
                     st.dataframe(df_arr, use_container_width=True, hide_index=True)
@@ -758,7 +634,6 @@ if menu == "📦 Importaciones":
                 docs = df_import["NOMBRE CORREO"].unique().tolist() if not df_import.empty and "NOMBRE CORREO" in df_import.columns else []
                 if "STATUS" in df_import.columns:
                     docs = df_import[df_import["STATUS"] != "ARRIBADO"]["NOMBRE CORREO"].unique().tolist()
-
                 with st.form("arribo_f", clear_on_submit=True):
                     d = st.selectbox("Documento", docs)
                     f = st.date_input("Fecha LLegada", date.today())
@@ -774,9 +649,9 @@ if menu == "📦 Importaciones":
                         a = st.selectbox("ASN", asns)
                         if st.form_submit_button("Confirmar Ingreso"):
                             try:
-                                sh_r = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
-                                w_m = sh_r.worksheet("MOVIMIENTOS")
-                                cell = w_m.find(str(a))
+                                sh_r  = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
+                                w_m   = sh_r.worksheet("MOVIMIENTOS")
+                                cell  = w_m.find(str(a))
                                 w_m.update_cell(cell.row, 6, "ALMACENADO")
                                 st.toast("Stock actualizado", icon="🏢")
                                 st.cache_data.clear(); st.rerun()
