@@ -264,9 +264,20 @@ def cargar_despachos():
             df["nombre_departamento_full"] = df["codigo_departamento"]
 
         # Filtrar solo tiendas aperturadas (ESTADO == "APERTURADAS") del sheet TIENDAS CARCASAS
-        tiendas_ok = obtener_tiendas_aperturadas()
-        if tiendas_ok:
-            df = df[df["codigo_departamento"].isin(tiendas_ok)].reset_index(drop=True)
+        try:
+            sh_t  = client.open("TIENDAS CARCASAS")
+            data_t = sh_t.sheet1.get_all_records()
+            if data_t:
+                df_t = pd.DataFrame(data_t)
+                df_t.columns = [str(c).strip().upper() for c in df_t.columns]
+                aperturadas = set(
+                    df_t[df_t["ESTADO"].astype(str).str.strip().str.upper() == "APERTURADAS"]
+                    ["TIENDA"].astype(str).str.strip().tolist()
+                )
+                if aperturadas:
+                    df = df[df["codigo_departamento"].isin(aperturadas)].reset_index(drop=True)
+        except Exception:
+            pass  # Si falla, muestra todo sin filtrar
 
         return df
     except Exception as e:
