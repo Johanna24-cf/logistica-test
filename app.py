@@ -30,7 +30,7 @@ def cargar_estilos():
         .titulo-seccion {
             color: #2d3436; font-weight: bold; font-size: 1.5rem;
             margin-top: 25px; margin-bottom: 15px;
-            border-bottom: 3px solid #6c5ce7; padding-bottom: 8px;
+            border-bottom: 3px solid #2d9e6b; padding-bottom: 8px;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -89,14 +89,18 @@ def cargar_datos_completos():
 ORDEN_MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
                "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"]
 
+# Paleta verde → amarillo
 COLORES_TIENDAS = [
-    "#6c5ce7", "#00b894", "#e17055", "#0984e3", "#fdcb6e",
-    "#d63031", "#00cec9", "#a29bfe", "#fd79a8", "#55efc4",
-    "#e84393", "#2d3436", "#636e72", "#b2bec3", "#74b9ff",
-    "#fab1a0", "#81ecec", "#ffeaa7", "#a29bfe", "#dfe6e9",
+    "#1a7a4a", "#2d9e6b", "#3dbb7e", "#5dcf96", "#85dcaa",
+    "#b5e878", "#cef250", "#e8d44d", "#f0c040", "#f5a623",
+    "#f7c948", "#a8d85a", "#72c472", "#4db88c", "#2eaa82",
+    "#6bcf85", "#d4e84a", "#f2d740", "#e8b830", "#c8e06a",
 ]
 
-PURPLE = "#6c5ce7"
+GREEN_MAIN   = "#2d9e6b"
+YELLOW_MAIN  = "#c8e06a"
+GREEN_DARK   = "#1a7a4a"
+GREEN_LIGHT  = "#85dcaa"
 
 
 @st.cache_data(ttl=600)
@@ -108,43 +112,67 @@ def cargar_despachos():
         if not all_values or len(all_values) < 2:
             return pd.DataFrame()
 
-        # Usar get_all_values para evitar error por headers vacíos/duplicados
         raw_headers = all_values[0]
         rows = all_values[1:]
 
-        # Limpiar headers: renombrar vacíos con _col_N
+        # Limpiar headers duplicados / vacíos
         headers = []
         seen = {}
         for i, h in enumerate(raw_headers):
-            h_clean = str(h).strip().lower()
+            h_clean = str(h).strip()
             if h_clean == "":
                 h_clean = f"_col_{i}"
-            if h_clean in seen:
-                seen[h_clean] += 1
-                h_clean = f"{h_clean}_{seen[h_clean]}"
+            key = h_clean.lower()
+            if key in seen:
+                seen[key] += 1
+                h_clean = f"{h_clean}_{seen[key]}"
             else:
-                seen[h_clean] = 0
+                seen[key] = 0
             headers.append(h_clean)
 
         df = pd.DataFrame(rows, columns=headers)
 
-        # Eliminar columnas fantasma (_col_N) que no nos interesan
+        # Normalizar nombres de columna a minúsculas para acceso uniforme
+        df.columns = [c.strip().lower() for c in df.columns]
+
+        # Eliminar columnas fantasma
         df = df[[c for c in df.columns if not c.startswith("_col_")]]
 
-        # Eliminar filas completamente vacías
-        df = df[df.apply(lambda r: r.str.strip().ne("").any(), axis=1)].reset_index(drop=True)
+        # Eliminar filas vacías
+        df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)].reset_index(drop=True)
 
+        # Tipos
         df["unidades"] = pd.to_numeric(df.get("unidades", 0), errors="coerce").fillna(0).astype(int)
-        df["mes"] = df["mes"].astype(str).str.strip().str.upper()
-        df["codigo_color"] = df["codigo_color"].astype(str).str.strip()
-        df["codigo_departamento"] = df["codigo_departamento"].astype(str).str.strip()
+
+        # Normalizar columna mes → MAYÚSCULAS
+        col_mes = next((c for c in df.columns if "mes" in c), None)
+        if col_mes:
+            df["mes"] = df[col_mes].astype(str).str.strip().str.upper()
+        else:
+            df["mes"] = "SIN MES"
+
+        # Columna SKU sin punto
+        col_sku = next((c for c in df.columns if "codigo_color_sin_punto" in c), None)
+        if col_sku:
+            df["sku"] = df[col_sku].astype(str).str.strip()
+        else:
+            df["sku"] = df.get("codigo_color", pd.Series([""] * len(df))).astype(str).str.strip()
+
+        # Descripción producto
+        col_desc = next((c for c in df.columns if "descripci" in c.lower()), None)
+        df["descripcion"] = df[col_desc].astype(str).str.strip() if col_desc else ""
+
+        # Tienda
+        df["codigo_departamento"] = df.get("codigo_departamento", pd.Series([""] * len(df))).astype(str).str.strip()
 
         if "nombre_departamento" in df.columns:
             df["nombre_tienda"] = df["nombre_departamento"].astype(str).str.replace(
                 r"^\d+\.-\s*", "", regex=True
             ).str.strip()
+            df["nombre_departamento_full"] = df["nombre_departamento"].astype(str).str.strip()
         else:
             df["nombre_tienda"] = df["codigo_departamento"]
+            df["nombre_departamento_full"] = df["codigo_departamento"]
 
         return df
     except Exception as e:
@@ -160,51 +188,117 @@ def _ordenar_meses(df, col="mes"):
     return df.sort_values("_orden_mes").drop(columns=["_orden_mes"])
 
 
+def _filtros_sidebar_despachos(df):
+    """Devuelve df filtrado según los filtros en sidebar."""
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🔍 Filtros Despachos")
+
+    # Filtro tienda
+    tiendas_opts = sorted(df["nombre_tienda"].unique().tolist())
+    sel_tiendas = st.sidebar.multiselect(
+        "Tiendas",
+        options=["TODAS"] + tiendas_opts,
+        default=["TODAS"],
+        key="sb_tiendas"
+    )
+
+    # Filtro mes
+    meses_opts = sorted(df["mes"].unique(), key=lambda m: ORDEN_MESES.index(m) if m in ORDEN_MESES else 99)
+    sel_meses = st.sidebar.multiselect(
+        "Meses",
+        options=["TODOS"] + meses_opts,
+        default=["TODOS"],
+        key="sb_meses"
+    )
+
+    df_f = df.copy()
+    if "TODAS" not in sel_tiendas and sel_tiendas:
+        df_f = df_f[df_f["nombre_tienda"].isin(sel_tiendas)]
+    if "TODOS" not in sel_meses and sel_meses:
+        df_f = df_f[df_f["mes"].isin(sel_meses)]
+
+    return df_f
+
+
 def _render_metricas_despachos(df):
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("📦 Total unidades", f"{int(df['unidades'].sum()):,}")
-    c2.metric("🎨 Productos únicos", f"{df['codigo_color'].nunique():,}")
+    c2.metric("🎨 SKUs únicos", f"{df['sku'].nunique():,}")
     c3.metric("🏪 Tiendas activas", df["codigo_departamento"].nunique())
     c4.metric("📅 Meses con data", df["mes"].nunique())
 
 
 def _render_top10(df, n=10):
-    st.markdown('<div class="titulo-seccion">🏆 Top productos por unidades</div>', unsafe_allow_html=True)
+    st.markdown('<div class="titulo-seccion">🏆 Top 10 SKUs despachados</div>', unsafe_allow_html=True)
 
-    meses_disp = sorted(df["mes"].unique(), key=lambda m: ORDEN_MESES.index(m) if m in ORDEN_MESES else 99)
-    sel_mes = st.multiselect(
-        "Filtrar por mes",
-        options=["TODOS"] + meses_disp,
-        default=["TODOS"],
-        key="top10_mes"
-    )
+    col_f1, col_f2, col_f3 = st.columns(3)
+
+    # Filtro tienda (dentro del gráfico, independiente del sidebar)
+    with col_f1:
+        tiendas_opts = sorted(df["nombre_tienda"].unique().tolist())
+        sel_t = st.multiselect(
+            "Tienda(s)",
+            options=["TODAS"] + tiendas_opts,
+            default=["TODAS"],
+            key="top10_tienda"
+        )
+    with col_f2:
+        meses_opts = sorted(df["mes"].unique(), key=lambda m: ORDEN_MESES.index(m) if m in ORDEN_MESES else 99)
+        sel_m = st.multiselect(
+            "Mes(es)",
+            options=["TODOS"] + meses_opts,
+            default=["TODOS"],
+            key="top10_mes"
+        )
+    with col_f3:
+        n_top = st.selectbox("Mostrar top", options=[5, 10, 15, 20], index=1, key="top10_n")
 
     df_f = df.copy()
-    if "TODOS" not in sel_mes and sel_mes:
-        df_f = df_f[df_f["mes"].isin(sel_mes)]
+    if "TODAS" not in sel_t and sel_t:
+        df_f = df_f[df_f["nombre_tienda"].isin(sel_t)]
+    if "TODOS" not in sel_m and sel_m:
+        df_f = df_f[df_f["mes"].isin(sel_m)]
+
+    # Agrupar con descripción (tomar la primera descripción asociada a cada SKU)
+    desc_map = df_f.groupby("sku")["descripcion"].first().to_dict()
 
     top = (
-        df_f.groupby("codigo_color")["unidades"]
+        df_f.groupby("sku")["unidades"]
         .sum()
-        .nlargest(n)
+        .nlargest(n_top)
         .reset_index()
-        .rename(columns={"codigo_color": "Producto", "unidades": "Unidades"})
-        .sort_values("Unidades", ascending=True)
+        .sort_values("unidades", ascending=True)
     )
+    top["descripcion"] = top["sku"].map(desc_map).fillna("")
+
+    # Escala de colores verde → amarillo según posición
+    n_bars = len(top)
+    colores_barra = [
+        f"hsl({int(120 - (i / max(n_bars - 1, 1)) * 60)}, 70%, 45%)"
+        for i in range(n_bars)
+    ]
 
     fig = go.Figure(go.Bar(
-        x=top["Unidades"],
-        y=top["Producto"],
+        x=top["unidades"],
+        y=top["sku"],
         orientation="h",
-        marker_color=PURPLE,
-        text=top["Unidades"].apply(lambda v: f"{v:,}"),
+        marker=dict(color=colores_barra),
+        text=top["unidades"].apply(lambda v: f"{v:,}"),
         textposition="outside",
-        hovertemplate="<b>%{y}</b><br>Unidades: %{x:,}<extra></extra>",
+        # Hover: SKU + descripción + unidades
+        customdata=top[["descripcion"]].values,
+        hovertemplate=(
+            "<b>SKU: %{y}</b><br>"
+            "📦 %{customdata[0]}<br>"
+            "Unidades: %{x:,}"
+            "<extra></extra>"
+        ),
     ))
+
     fig.update_layout(
-        height=420,
-        margin=dict(l=10, r=60, t=10, b=30),
-        xaxis=dict(showgrid=True, gridcolor="#eee", title="Unidades"),
+        height=max(380, n_top * 38),
+        margin=dict(l=10, r=80, t=10, b=30),
+        xaxis=dict(showgrid=True, gridcolor="#e8f5ee", title="Unidades"),
         yaxis=dict(showgrid=False, title=""),
         plot_bgcolor="white",
         paper_bgcolor="white",
@@ -212,83 +306,98 @@ def _render_top10(df, n=10):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    with st.expander("Ver tabla completa"):
-        top_display = top.sort_values("Unidades", ascending=False).reset_index(drop=True)
-        top_display.index += 1
-        top_display["Unidades"] = top_display["Unidades"].apply(lambda v: f"{v:,}")
-        st.dataframe(top_display, use_container_width=True)
+    # Tabla expandible con SKU + descripción
+    with st.expander("📋 Ver tabla detalle"):
+        tabla = top.sort_values("unidades", ascending=False).reset_index(drop=True)
+        tabla.index += 1
+        tabla = tabla.rename(columns={"sku": "SKU", "unidades": "Unidades", "descripcion": "Descripción"})
+        tabla["Unidades"] = tabla["Unidades"].apply(lambda v: f"{v:,}")
+        st.dataframe(tabla[["SKU", "Descripción", "Unidades"]], use_container_width=True)
 
 
 def _render_evolutivo(df):
-    st.markdown('<div class="titulo-seccion">📈 Evolutivo mensual por tienda</div>', unsafe_allow_html=True)
-
-    tiendas_disp = (
-        df[["codigo_departamento", "nombre_tienda"]]
-        .drop_duplicates()
-        .sort_values("codigo_departamento")
-        .apply(lambda r: f"{r['codigo_departamento']} · {r['nombre_tienda']}", axis=1)
-        .tolist()
-    )
+    st.markdown('<div class="titulo-seccion">📈 Evolutivo de despachos por mes</div>', unsafe_allow_html=True)
 
     col_t, col_m = st.columns([2, 2])
+
     with col_t:
+        tiendas_disp = sorted(df["nombre_tienda"].unique().tolist())
         sel_tiendas = st.multiselect(
-            "Seleccionar tiendas",
-            options=tiendas_disp,
-            default=tiendas_disp[:3] if len(tiendas_disp) >= 3 else tiendas_disp,
+            "Tienda(s)",
+            options=["TODAS"] + tiendas_disp,
+            default=["TODAS"],
             key="evol_tiendas"
         )
     with col_m:
         meses_disp = sorted(df["mes"].unique(), key=lambda m: ORDEN_MESES.index(m) if m in ORDEN_MESES else 99)
         sel_meses = st.multiselect(
-            "Meses a mostrar",
+            "Mes(es)",
             options=meses_disp,
             default=meses_disp,
             key="evol_meses"
         )
 
-    if not sel_tiendas or not sel_meses:
-        st.info("Selecciona al menos una tienda y un mes.")
+    if not sel_meses:
+        st.info("Selecciona al menos un mes.")
         return
 
-    codigos_sel = [s.split(" · ")[0] for s in sel_tiendas]
+    df_f = df.copy()
+    if "TODAS" not in sel_tiendas and sel_tiendas:
+        df_f = df_f[df_f["nombre_tienda"].isin(sel_tiendas)]
+    if sel_meses:
+        df_f = df_f[df_f["mes"].isin(sel_meses)]
 
-    df_f = df[
-        df["codigo_departamento"].isin(codigos_sel) &
-        df["mes"].isin(sel_meses)
-    ].copy()
-
-    pivot = (
-        df_f.groupby(["mes", "codigo_departamento", "nombre_tienda"])["unidades"]
-        .sum()
-        .reset_index()
-    )
-    pivot = _ordenar_meses(pivot, col="mes")
+    # Cuando es "TODAS" → línea total; cuando hay selección → una línea por tienda
+    modo_total = "TODAS" in sel_tiendas or not sel_tiendas
 
     fig = go.Figure()
-    for i, cod in enumerate(codigos_sel):
-        df_t = pivot[pivot["codigo_departamento"] == cod]
-        if df_t.empty:
-            continue
-        nombre = df_t["nombre_tienda"].iloc[0]
-        color = COLORES_TIENDAS[i % len(COLORES_TIENDAS)]
+
+    if modo_total:
+        pivot = df_f.groupby("mes")["unidades"].sum().reset_index()
+        pivot = _ordenar_meses(pivot)
         fig.add_trace(go.Scatter(
-            x=df_t["mes"],
-            y=df_t["unidades"],
+            x=pivot["mes"],
+            y=pivot["unidades"],
             mode="lines+markers+text",
-            name=f"{cod} · {nombre}",
-            line=dict(color=color, width=2.5),
-            marker=dict(size=8, color=color),
-            text=df_t["unidades"].apply(lambda v: f"{v:,}"),
+            name="TOTAL",
+            line=dict(color=GREEN_MAIN, width=3),
+            marker=dict(size=10, color=GREEN_MAIN),
+            text=pivot["unidades"].apply(lambda v: f"{v:,}"),
             textposition="top center",
-            hovertemplate=f"<b>{nombre}</b><br>Mes: %{{x}}<br>Unidades: %{{y:,}}<extra></extra>",
+            hovertemplate="<b>Total</b><br>Mes: %{x}<br>Unidades: %{y:,}<extra></extra>",
+            fill="tozeroy",
+            fillcolor="rgba(45,158,107,0.12)",
         ))
+    else:
+        pivot = (
+            df_f.groupby(["mes", "nombre_tienda"])["unidades"]
+            .sum()
+            .reset_index()
+        )
+        pivot = _ordenar_meses(pivot)
+        tiendas_sel_list = [t for t in sel_tiendas if t != "TODAS"]
+        for i, tienda in enumerate(tiendas_sel_list):
+            df_t = pivot[pivot["nombre_tienda"] == tienda]
+            if df_t.empty:
+                continue
+            color = COLORES_TIENDAS[i % len(COLORES_TIENDAS)]
+            fig.add_trace(go.Scatter(
+                x=df_t["mes"],
+                y=df_t["unidades"],
+                mode="lines+markers+text",
+                name=tienda,
+                line=dict(color=color, width=2.5),
+                marker=dict(size=8, color=color),
+                text=df_t["unidades"].apply(lambda v: f"{v:,}"),
+                textposition="top center",
+                hovertemplate=f"<b>{tienda}</b><br>Mes: %{{x}}<br>Unidades: %{{y:,}}<extra></extra>",
+            ))
 
     fig.update_layout(
         height=420,
         margin=dict(l=10, r=20, t=20, b=80),
         xaxis=dict(showgrid=False, title=""),
-        yaxis=dict(showgrid=True, gridcolor="#eee", title="Unidades"),
+        yaxis=dict(showgrid=True, gridcolor="#e8f5ee", title="Unidades"),
         plot_bgcolor="white",
         paper_bgcolor="white",
         font=dict(family="Arial", size=12, color="#2d3436"),
@@ -297,19 +406,22 @@ def _render_evolutivo(df):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    with st.expander("Ver tabla pivoteada"):
-        tabla = pivot.pivot_table(
-            index="nombre_tienda",
-            columns="mes",
-            values="unidades",
-            aggfunc="sum",
-            fill_value=0
-        )
-        cols_ord = [m for m in ORDEN_MESES if m in tabla.columns]
-        tabla = tabla[cols_ord]
-        tabla["TOTAL"] = tabla.sum(axis=1)
-        tabla = tabla.sort_values("TOTAL", ascending=False)
-        st.dataframe(tabla.style.format("{:,}"), use_container_width=True)
+    with st.expander("📋 Ver tabla pivoteada"):
+        if modo_total:
+            tabla = pivot.set_index("mes")[["unidades"]]
+            tabla.columns = ["Unidades"]
+            tabla["Unidades"] = tabla["Unidades"].apply(lambda v: f"{v:,}")
+            st.dataframe(tabla, use_container_width=True)
+        else:
+            tabla = pivot.pivot_table(
+                index="nombre_tienda", columns="mes", values="unidades",
+                aggfunc="sum", fill_value=0
+            )
+            cols_ord = [m for m in ORDEN_MESES if m in tabla.columns]
+            tabla = tabla[cols_ord]
+            tabla["TOTAL"] = tabla.sum(axis=1)
+            tabla = tabla.sort_values("TOTAL", ascending=False)
+            st.dataframe(tabla.style.format("{:,}"), use_container_width=True)
 
 
 def _render_heatmap(df):
@@ -324,7 +436,13 @@ def _render_heatmap(df):
 
     fig = px.imshow(
         tabla,
-        color_continuous_scale=[[0, "#f8f6ff"], [0.5, "#a29bfe"], [1, "#6c5ce7"]],
+        color_continuous_scale=[
+            [0.0,  "#f0faf4"],
+            [0.25, "#85dcaa"],
+            [0.5,  "#3dbb7e"],
+            [0.75, "#c8e06a"],
+            [1.0,  "#e8a020"],
+        ],
         aspect="auto",
         text_auto=True,
         labels=dict(color="Unidades"),
@@ -350,27 +468,16 @@ def render_dash_despachos():
         st.warning("⚠️ Sin datos en CONSOLIDADO_DESPACHOS o error de conexión.")
         return
 
-    columnas_req = {"codigo_color", "codigo_departamento", "unidades", "mes"}
+    columnas_req = {"sku", "unidades", "mes"}
     faltantes = columnas_req - set(df.columns)
     if faltantes:
         st.error(f"❌ Columnas faltantes en el sheet: {', '.join(faltantes)}")
         return
 
-    if "semana" in df.columns:
-        semanas = sorted(df["semana"].unique())
-        with st.expander("⚙️ Filtro global por semana"):
-            sel_sem = st.multiselect(
-                "Semanas",
-                options=["TODAS"] + semanas,
-                default=["TODAS"],
-                key="global_semana"
-            )
-            if "TODAS" not in sel_sem and sel_sem:
-                df = df[df["semana"].isin(sel_sem)]
-
+    st.markdown('<div class="titulo-seccion">📊 Dashboard de Despachos</div>', unsafe_allow_html=True)
     _render_metricas_despachos(df)
     st.divider()
-    _render_top10(df, n=10)
+    _render_top10(df)
     st.divider()
     _render_evolutivo(df)
     st.divider()
