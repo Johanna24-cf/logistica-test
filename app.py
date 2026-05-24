@@ -271,7 +271,7 @@ def _render_top10(df, n=10):
         .reset_index()
         .sort_values("unidades", ascending=True)
     )
-    top["sku"] = top["sku"].astype(str)  # siempre string, garantiza unicidad en eje Y
+    top["sku"] = "SKU-" + top["sku"].astype(str).str.strip()  # prefijo evita que plotly lo trate como número
     top["descripcion"] = top["sku"].map(desc_map).fillna("Sin descripción")
 
     # Escala verde → amarillo
@@ -313,6 +313,9 @@ def _render_top10(df, n=10):
             title="",
             tickfont=dict(size=12),
             automargin=True,
+            type="category",        # CRÍTICO: fuerza eje Y como categoría, no numérico
+            categoryorder="array",
+            categoryarray=top["sku"].tolist(),
         ),
         plot_bgcolor="white",
         paper_bgcolor="white",
