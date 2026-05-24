@@ -250,6 +250,10 @@ def cargar_despachos():
         col_desc = next((c for c in df.columns if "descripci" in c.lower()), None)
         df["descripcion"] = df[col_desc].astype(str).str.strip() if col_desc else ""
 
+        # Columna Tipo (General / Refuerzo / P26-39P / etc.)
+        col_tipo = next((c for c in df.columns if c.lower() == "tipo"), None)
+        df["tipo"] = df[col_tipo].astype(str).str.strip() if col_tipo else "Sin tipo"
+
         df["codigo_departamento"] = df.get("codigo_departamento", pd.Series([""] * len(df))).astype(str).str.strip()
 
         if "nombre_departamento" in df.columns:
@@ -258,6 +262,11 @@ def cargar_despachos():
         else:
             df["nombre_tienda"] = df["codigo_departamento"]
             df["nombre_departamento_full"] = df["codigo_departamento"]
+
+        # Filtrar solo tiendas aperturadas (ESTADO == "APERTURADAS") del sheet TIENDAS CARCASAS
+        tiendas_ok = obtener_tiendas_aperturadas()
+        if tiendas_ok:
+            df = df[df["codigo_departamento"].isin(tiendas_ok)].reset_index(drop=True)
 
         return df
     except Exception as e:
@@ -373,28 +382,70 @@ def _render_evolutivo(df):
     modo_total = "TODAS" in sel_tiendas or not sel_tiendas
     fig = go.Figure()
 
+    # Desglose por tipo para tooltip
+    tiene_tipo = "tipo" in df_f.columns
+    if tiene_tipo:
+        tipo_cols = sorted(df_f["tipo"].dropna().unique().tolist())
+    else:
+        tipo_cols = []
+
     if modo_total:
         pivot = _ordenar_meses(df_f.groupby("mes")["unidades"].sum().reset_index())
+
+        if tiene_tipo:
+            tipo_evol = df_f.groupby(["mes", "tipo"])["unidades"].sum().unstack(fill_value=0).reset_index()
+            pivot = pivot.merge(tipo_evol, on="mes", how="left")
+            for t in tipo_cols:
+                if t not in pivot.columns:
+                    pivot[t] = 0
+                pivot[t] = pivot[t].fillna(0).astype(int)
+            tipo_lines = "".join([f"&nbsp;&nbsp;• {t}: %{{customdata[{i+1}]:,}}<br>" for i, t in enumerate(tipo_cols)])
+            customdata = list(zip(*([pivot[t].tolist() for t in ["unidades"] + tipo_cols])))
+            htemplate = (f"<b>Total</b><br>Mes: %{{x}}<br>📦 Total: %{{customdata[0]:,}}<br>"
+                         f"<i>Desglose:</i><br>{tipo_lines}<extra></extra>")
+        else:
+            customdata = [[v] for v in pivot["unidades"]]
+            htemplate = "<b>Total</b><br>Mes: %{x}<br>Unidades: %{customdata[0]:,}<extra></extra>"
+
         fig.add_trace(go.Scatter(
             x=pivot["mes"], y=pivot["unidades"],
             mode="lines+markers+text", name="TOTAL",
             line=dict(color=GREEN_MAIN, width=3), marker=dict(size=10, color=GREEN_MAIN),
             text=pivot["unidades"].apply(lambda v: f"{v:,}"), textposition="top center",
-            hovertemplate="<b>Total</b><br>Mes: %{x}<br>Unidades: %{y:,}<extra></extra>",
+            customdata=customdata, hovertemplate=htemplate,
             fill="tozeroy", fillcolor="rgba(45,158,107,0.12)",
         ))
     else:
         pivot = _ordenar_meses(df_f.groupby(["mes", "nombre_tienda"])["unidades"].sum().reset_index())
+
+        if tiene_tipo:
+            tipo_evol_t = df_f.groupby(["mes", "nombre_tienda", "tipo"])["unidades"].sum().unstack(fill_value=0).reset_index()
+            pivot = pivot.merge(tipo_evol_t, on=["mes", "nombre_tienda"], how="left")
+            for t in tipo_cols:
+                if t not in pivot.columns:
+                    pivot[t] = 0
+                pivot[t] = pivot[t].fillna(0).astype(int)
+
         for i, tienda in enumerate([t for t in sel_tiendas if t != "TODAS"]):
             df_t = pivot[pivot["nombre_tienda"] == tienda]
             if df_t.empty: continue
             color = COLORES_TIENDAS[i % len(COLORES_TIENDAS)]
+
+            if tiene_tipo:
+                tipo_lines = "".join([f"&nbsp;&nbsp;• {t}: %{{customdata[{j+1}]:,}}<br>" for j, t in enumerate(tipo_cols)])
+                customdata_t = list(zip(*([df_t[t].tolist() for t in ["unidades"] + tipo_cols])))
+                htemplate_t = (f"<b>{tienda}</b><br>Mes: %{{x}}<br>📦 Total: %{{customdata[0]:,}}<br>"
+                               f"<i>Desglose:</i><br>{tipo_lines}<extra></extra>")
+            else:
+                customdata_t = [[v] for v in df_t["unidades"]]
+                htemplate_t = f"<b>{tienda}</b><br>Mes: %{{x}}<br>Unidades: %{{customdata[0]:,}}<extra></extra>"
+
             fig.add_trace(go.Scatter(
                 x=df_t["mes"], y=df_t["unidades"],
                 mode="lines+markers+text", name=tienda,
                 line=dict(color=color, width=2.5), marker=dict(size=8, color=color),
                 text=df_t["unidades"].apply(lambda v: f"{v:,}"), textposition="top center",
-                hovertemplate=f"<b>{tienda}</b><br>Mes: %{{x}}<br>Unidades: %{{y:,}}<extra></extra>",
+                customdata=customdata_t, hovertemplate=htemplate_t,
             ))
 
     fig.update_layout(
@@ -433,12 +484,48 @@ def _render_heatmap(df):
     tabla["TOTAL"] = tabla.sum(axis=1)
     tabla = tabla.sort_values("TOTAL", ascending=False).drop(columns=["TOTAL"])
 
+    # Desglose por tipo para el tooltip del heatmap
+    tiene_tipo_hm = "tipo" in df.columns
+    if tiene_tipo_hm:
+        tipo_cols_hm = sorted(df["tipo"].dropna().unique().tolist())
+        tipo_hm = df.groupby(["nombre_tienda", "mes", "tipo"])["unidades"].sum().unstack(fill_value=0).reset_index()
+        # Construir matriz customdata: shape (tiendas, meses, n_tipos+1)
+        tiendas_idx = tabla.index.tolist()
+        meses_idx   = tabla.columns.tolist()
+        # customdata[i][j] = [total, tipo1, tipo2, ...]
+        cdata = []
+        for tienda in tiendas_idx:
+            fila = []
+            for mes in meses_idx:
+                total_val = int(tabla.loc[tienda, mes]) if tienda in tabla.index and mes in tabla.columns else 0
+                fila_tipo = tipo_hm[(tipo_hm["nombre_tienda"] == tienda) & (tipo_hm["mes"] == mes)]
+                vals = [total_val]
+                for t in tipo_cols_hm:
+                    vals.append(int(fila_tipo[t].values[0]) if not fila_tipo.empty and t in fila_tipo.columns else 0)
+                fila.append(vals)
+            cdata.append(fila)
+        tipo_lines_hm = "".join([f"&nbsp;&nbsp;• {t}: %{{customdata[{j+1}]:,}}<br>" for j, t in enumerate(tipo_cols_hm)])
+        hover_hm = (
+            "<b>%{y} — %{x}</b><br>"
+            "📦 Total: %{customdata[0]:,}<br>"
+            "<i>Desglose:</i><br>"
+            f"{tipo_lines_hm}"
+            "<extra></extra>"
+        )
+    else:
+        cdata = None
+        hover_hm = "<b>%{y} — %{x}</b><br>📦 Unidades: %{z:,}<extra></extra>"
+
     fig = px.imshow(
         tabla,
         color_continuous_scale=[[0.0, "#f0faf4"], [0.25, "#85dcaa"], [0.5, "#3dbb7e"], [0.75, "#c8e06a"], [1.0, "#e8a020"]],
         aspect="auto", text_auto=True, labels=dict(color="Unidades"),
     )
-    fig.update_traces(texttemplate="%{z:,}", textfont_size=11)
+    fig.update_traces(
+        texttemplate="%{z:,}", textfont_size=11,
+        customdata=cdata if cdata is not None else None,
+        hovertemplate=hover_hm,
+    )
     fig.update_layout(
         height=max(350, len(tabla) * 32 + 80),
         margin=dict(l=10, r=10, t=20, b=40),
@@ -545,7 +632,7 @@ if menu == "📦 Importaciones":
     tab_dash, tab_recep, tab_ops = st.tabs(["📊 Dash Importacion", "📑 Gestión interna", "⚙️ Operaciones"])
 
     with tab_dash:
-        st.subheader("🏪 Próximas Aperturas de Tiendas - Perú")
+        st.subheader("🏪 Próximas Aperturas")
         if not df_tiendas.empty:
             columnas_tiendas_req = ["ESTADO", "FCH ESTIMADA", "TIENDA", "DESCRIPCION"]
             if all(col in df_tiendas.columns for col in columnas_tiendas_req):
@@ -574,7 +661,7 @@ if menu == "📦 Importaciones":
                 m1, m2, m3 = st.columns(3)
                 total     = df_import["NOMBRE CORREO"].nunique()
                 arribados = df_import[df_import["STATUS"] == "ARRIBADO"]["NOMBRE CORREO"].nunique()
-                m1.metric("Total Importaciones", total)
+                m1.metric("Total Docs", total)
                 m2.metric("Arribados", arribados)
                 m3.metric("En Tránsito", total - arribados)
 
