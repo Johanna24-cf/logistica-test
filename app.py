@@ -229,11 +229,10 @@ def _render_metricas_despachos(df):
 
 
 def _render_top10(df, n=10):
-    st.markdown('<div class="titulo-seccion">🏆 Top 10 SKUs despachados</div>', unsafe_allow_html=True)
+    st.markdown('<div class="titulo-seccion">🏆 Top SKUs despachados</div>', unsafe_allow_html=True)
 
     col_f1, col_f2, col_f3 = st.columns(3)
 
-    # Filtro tienda (dentro del gráfico, independiente del sidebar)
     with col_f1:
         tiendas_opts = sorted(df["nombre_tienda"].unique().tolist())
         sel_t = st.multiselect(
@@ -254,12 +253,15 @@ def _render_top10(df, n=10):
         n_top = st.selectbox("Mostrar top", options=[5, 10, 15, 20], index=1, key="top10_n")
 
     df_f = df.copy()
+    # CRÍTICO: forzar SKU como string categórico para evitar que plotly lo trate como número
+    df_f["sku"] = df_f["sku"].astype(str).str.strip()
+
     if "TODAS" not in sel_t and sel_t:
         df_f = df_f[df_f["nombre_tienda"].isin(sel_t)]
     if "TODOS" not in sel_m and sel_m:
         df_f = df_f[df_f["mes"].isin(sel_m)]
 
-    # Agrupar con descripción (tomar la primera descripción asociada a cada SKU)
+    # Descripción por SKU
     desc_map = df_f.groupby("sku")["descripcion"].first().to_dict()
 
     top = (
@@ -269,44 +271,62 @@ def _render_top10(df, n=10):
         .reset_index()
         .sort_values("unidades", ascending=True)
     )
-    top["descripcion"] = top["sku"].map(desc_map).fillna("")
+    top["sku"] = top["sku"].astype(str)  # doble seguro
+    top["descripcion"] = top["sku"].map(desc_map).fillna("Sin descripción")
 
-    # Escala de colores verde → amarillo según posición
+    # Etiqueta corta para el eje Y: descripción truncada a 35 chars
+    top["label_eje"] = top["descripcion"].apply(
+        lambda d: d[:35] + "…" if len(d) > 35 else d
+    )
+
+    # Escala verde → amarillo
     n_bars = len(top)
     colores_barra = [
-        f"hsl({int(120 - (i / max(n_bars - 1, 1)) * 60)}, 70%, 45%)"
+        f"hsl({int(120 - (i / max(n_bars - 1, 1)) * 60)}, 68%, 42%)"
         for i in range(n_bars)
     ]
 
     fig = go.Figure(go.Bar(
         x=top["unidades"],
-        y=top["sku"],
+        y=top["label_eje"],          # eje Y = descripción corta
         orientation="h",
         marker=dict(color=colores_barra),
         text=top["unidades"].apply(lambda v: f"{v:,}"),
         textposition="outside",
-        # Hover: SKU + descripción + unidades
-        customdata=top[["descripcion"]].values,
+        textfont=dict(size=12, color="#2d3436"),
+        # Hover completo: SKU + descripción completa + unidades
+        customdata=list(zip(top["sku"], top["descripcion"])),
         hovertemplate=(
-            "<b>SKU: %{y}</b><br>"
-            "📦 %{customdata[0]}<br>"
-            "Unidades: %{x:,}"
+            "<b>%{customdata[1]}</b><br>"
+            "🔑 SKU: %{customdata[0]}<br>"
+            "📦 Unidades: %{x:,}"
             "<extra></extra>"
         ),
     ))
 
     fig.update_layout(
-        height=max(380, n_top * 38),
-        margin=dict(l=10, r=80, t=10, b=30),
-        xaxis=dict(showgrid=True, gridcolor="#e8f5ee", title="Unidades"),
-        yaxis=dict(showgrid=False, title=""),
+        height=max(400, n_top * 48),
+        margin=dict(l=10, r=90, t=15, b=30),
+        xaxis=dict(
+            showgrid=True,
+            gridcolor="#e8f5ee",
+            title="Unidades",
+            tickfont=dict(size=11),
+        ),
+        yaxis=dict(
+            showgrid=False,
+            title="",
+            tickfont=dict(size=12),
+            automargin=True,
+        ),
         plot_bgcolor="white",
         paper_bgcolor="white",
         font=dict(family="Arial", size=12, color="#2d3436"),
+        bargap=0.35,
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # Tabla expandible con SKU + descripción
+    # Tabla expandible: SKU | Descripción completa | Unidades
     with st.expander("📋 Ver tabla detalle"):
         tabla = top.sort_values("unidades", ascending=False).reset_index(drop=True)
         tabla.index += 1
