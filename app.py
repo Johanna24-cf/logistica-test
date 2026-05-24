@@ -558,10 +558,10 @@ menu = st.sidebar.radio("MENÚ PRINCIPAL", [
 # MENÚ: IMPORTACIONES
 # ----------------------------------------------------------
 if menu == "📦 Importaciones":
-    (tab_dash,) = st.tabs(["📊 Dash Importacion"])
+    (tab_dash,) = st.tabs(["📊 Dash Importación"])
 
     with tab_dash:
-        st.subheader("🏪 Próximas Aperturas")
+        st.subheader("🏪 Próximas Aperturas de Tiendas - Perú")
         if not df_tiendas.empty:
             columnas_tiendas_req = ["ESTADO", "FCH ESTIMADA", "TIENDA", "DESCRIPCION"]
             if all(col in df_tiendas.columns for col in columnas_tiendas_req):
@@ -590,7 +590,7 @@ if menu == "📦 Importaciones":
                 m1, m2, m3 = st.columns(3)
                 total     = df_import["NOMBRE CORREO"].nunique()
                 arribados = df_import[df_import["STATUS"] == "ARRIBADO"]["NOMBRE CORREO"].nunique()
-                m1.metric("Total Docs", total)
+                m1.metric("Total Importaciones", total)
                 m2.metric("Arribados", arribados)
                 m3.metric("En Tránsito", total - arribados)
 
