@@ -261,9 +261,6 @@ def _render_top10(df, n=10):
     if "TODOS" not in sel_m and sel_m:
         df_f = df_f[df_f["mes"].isin(sel_m)]
 
-    # Descripción por SKU
-    desc_map = df_f.groupby("sku")["descripcion"].first().to_dict()
-
     top = (
         df_f.groupby("sku")["unidades"]
         .sum()
@@ -271,8 +268,10 @@ def _render_top10(df, n=10):
         .reset_index()
         .sort_values("unidades", ascending=True)
     )
-    top["sku"] = "SKU-" + top["sku"].astype(str).str.strip()  # prefijo evita que plotly lo trate como número
-    top["descripcion"] = top["sku"].map(desc_map).fillna("Sin descripción")
+    # Mapear descripción ANTES de agregar prefijo (las claves del df_f no tienen prefijo)
+    top["descripcion"] = top["sku"].astype(str).map(desc_map).fillna("Sin descripción")
+    # Agregar prefijo DESPUÉS del mapeo para que Plotly trate el eje Y como categoría
+    top["sku"] = "SKU-" + top["sku"].astype(str).str.strip()
 
     # Escala verde → amarillo
     n_bars = len(top)
