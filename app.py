@@ -18,29 +18,121 @@ st.set_page_config(page_title="Sistema Logístico Carcasas", page_icon="📦", l
 def cargar_estilos():
     st.markdown("""
         <style>
-        .stDataFrame { font-size: 12px; }
+        /* ── Paleta global verde → amarillo ── */
+        :root {
+            --verde-oscuro:  #1a7a4a;
+            --verde-main:    #2d9e6b;
+            --verde-medio:   #3dbb7e;
+            --verde-claro:   #85dcaa;
+            --amarillo-lima: #c8e06a;
+            --amarillo:      #e8d44d;
+            --naranja-suave: #f0c040;
+        }
+
+        /* Sidebar */
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #1a7a4a 0%, #2d9e6b 60%, #c8e06a 100%);
+        }
+        [data-testid="stSidebar"] * { color: #ffffff !important; }
+        [data-testid="stSidebar"] .stRadio label { color: #fff !important; }
+        [data-testid="stSidebar"] button {
+            background-color: #e8d44d !important;
+            color: #1a7a4a !important;
+            border: none !important;
+            font-weight: 700 !important;
+        }
+
+        /* Título principal */
+        h1 { color: #1a7a4a !important; }
+
+        /* Tabs activos */
+        .stTabs [data-baseweb="tab-highlight"] { background-color: #2d9e6b !important; }
+        .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #1a7a4a !important; font-weight: 700; }
+
+        /* Métricas */
+        [data-testid="metric-container"] {
+            background: linear-gradient(135deg, #f0faf4, #e8f5ee);
+            border-left: 4px solid #2d9e6b;
+            border-radius: 10px;
+            padding: 12px 16px;
+        }
+        [data-testid="metric-container"] label { color: #1a7a4a !important; font-weight: 600; }
+        [data-testid="metric-container"] [data-testid="stMetricValue"] { color: #1a7a4a !important; font-size: 2rem !important; }
+
+        /* Cards de apertura */
         .apertura-card {
-            background-color: #ffffff; padding: 20px; border-radius: 12px;
-            border-left: 6px solid #6c5ce7; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            background: linear-gradient(135deg, #ffffff, #f0faf4);
+            padding: 20px; border-radius: 12px;
+            border-left: 6px solid #2d9e6b;
+            box-shadow: 0 4px 12px rgba(45,158,107,0.15);
             margin-bottom: 15px; min-height: 140px;
         }
-        .tienda-titulo { color: #2d3436; font-size: 1.1em; font-weight: 700; }
-        .desc-tienda { color: #636e72; font-size: 0.85em; }
-        .fecha-est { color: #d63031; font-weight: bold; font-size: 0.9em; margin-top: 10px; }
+        .tienda-titulo { color: #1a7a4a; font-size: 1.1em; font-weight: 700; }
+        .desc-tienda   { color: #636e72; font-size: 0.85em; }
+        .fecha-est     { color: #e8a020; font-weight: bold; font-size: 0.9em; margin-top: 10px; }
+
+        /* Sección títulos */
         .titulo-seccion {
-            color: #2d3436; font-weight: bold; font-size: 1.5rem;
+            color: #1a7a4a; font-weight: bold; font-size: 1.5rem;
             margin-top: 25px; margin-bottom: 15px;
             border-bottom: 3px solid #2d9e6b; padding-bottom: 8px;
+        }
+
+        /* Dataframes */
+        .stDataFrame { font-size: 12px; }
+        .stDataFrame thead tr th {
+            background-color: #2d9e6b !important;
+            color: white !important;
+        }
+
+        /* Botones generales */
+        .stButton > button {
+            background: linear-gradient(135deg, #2d9e6b, #3dbb7e) !important;
+            color: white !important; border: none !important;
+            border-radius: 8px !important; font-weight: 600 !important;
+        }
+        .stButton > button:hover {
+            background: linear-gradient(135deg, #1a7a4a, #2d9e6b) !important;
+        }
+
+        /* Divider */
+        hr { border-color: #c8e06a !important; }
+
+        /* Logo CF Supply area */
+        .logo-cf-supply {
+            position: fixed; top: 12px; right: 24px; z-index: 9999;
         }
         </style>
         """, unsafe_allow_html=True)
 
 @st.cache_data
 def mostrar_logo():
-    if os.path.exists("CARCASAS.png"): st.image("CARCASAS.png", width=250)
+    # Logo izquierdo (CARCASAS)
+    if os.path.exists("CARCASAS.png"):
+        st.image("CARCASAS.png", width=250)
+
+def mostrar_logo_cf():
+    # Logo CF Supply: esquina superior derecha via HTML absoluto
+    logos = []
+    for nombre in ["Logo CF Supply.png", "Logo CF Supply"]:
+        if os.path.exists(nombre):
+            logos.append(nombre)
+            break
+    if logos:
+        import base64
+        with open(logos[0], "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        ext = logos[0].split(".")[-1] if "." in logos[0] else "png"
+        st.markdown(
+            f'''<div class="logo-cf-supply">
+                <img src="data:image/{ext};base64,{b64}" width="180">
+            </div>''',
+            unsafe_allow_html=True
+        )
 
 cargar_estilos()
 mostrar_logo()
+mostrar_logo_cf()
 
 # 3. CONEXIÓN Y CARGA
 @st.cache_resource
@@ -618,10 +710,31 @@ if menu == "📦 Importaciones":
                 c1, c2 = st.columns(2)
                 with c1:
                     st.write("### ⏳ Pendientes")
-                    st.dataframe(df_import[df_import["STATUS"] != "ARRIBADO"].groupby(["NOMBRE CORREO", "HORA FECH", "STATUS"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
+                    df_pend = (
+                        df_import[df_import["STATUS"] != "ARRIBADO"]
+                        .groupby(["NOMBRE CORREO", "HORA FECH", "STATUS"])
+                        .size()
+                        .reset_index(name="ASNs")
+                    )
+                    # Orden: Aduanas → En tránsito → Origen → resto → vacío
+                    orden_status = {"ADUANAS": 0, "EN TRÁNSITO": 1, "EN TRANSITO": 1, "ORIGEN": 2}
+                    df_pend["_orden"] = df_pend["STATUS"].str.upper().str.strip().map(orden_status).fillna(
+                        df_pend["STATUS"].apply(lambda s: 99 if str(s).strip() == "" else 3)
+                    )
+                    df_pend = df_pend.sort_values("_orden").drop(columns=["_orden"])
+                    st.dataframe(df_pend, use_container_width=True, hide_index=True)
                 with c2:
                     st.write("### ✅ Arribados")
-                    st.dataframe(df_import[df_import["STATUS"] == "ARRIBADO"].groupby(["NOMBRE CORREO", "FCH LLEGADA"]).size().reset_index(name="ASNs"), use_container_width=True, hide_index=True)
+                    df_arr = (
+                        df_import[df_import["STATUS"] == "ARRIBADO"]
+                        .groupby(["NOMBRE CORREO", "FCH LLEGADA"])
+                        .size()
+                        .reset_index(name="ASNs")
+                    )
+                    # Ordenar: fecha más reciente primero, celdas vacías al final
+                    df_arr["_fch_dt"] = pd.to_datetime(df_arr["FCH LLEGADA"], errors="coerce")
+                    df_arr = df_arr.sort_values("_fch_dt", ascending=False, na_position="last").drop(columns=["_fch_dt"])
+                    st.dataframe(df_arr, use_container_width=True, hide_index=True)
         else:
             st.info("ℹ️ No hay registros con RECUENTO = 1, o la hoja está vacía.")
 
