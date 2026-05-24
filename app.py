@@ -114,7 +114,7 @@ def mostrar_logo():
 def mostrar_logo_cf():
     # Logo CF Supply: esquina superior derecha via HTML absoluto
     logos = []
-    for nombre in ["Logo CF Supply.png", "Logo CF Supply"]:
+    for nombre in ["Logotipo CF Supply.png", "Logo CF Supply.png", "Logotipo CF Supply"]:
         if os.path.exists(nombre):
             logos.append(nombre)
             break
