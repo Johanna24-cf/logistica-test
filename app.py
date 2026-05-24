@@ -113,22 +113,8 @@ def mostrar_logo():
 
 def mostrar_logo_cf():
     # Logo CF Supply: esquina superior derecha via HTML absoluto
-    logos = []
-    for nombre in ["Logotipo CF Supply.png", "Logo CF Supply.png", "Logotipo CF Supply"]:
-        if os.path.exists(nombre):
-            logos.append(nombre)
-            break
-    if logos:
-        import base64
-        with open(logos[0], "rb") as f:
-            b64 = base64.b64encode(f.read()).decode()
-        ext = logos[0].split(".")[-1] if "." in logos[0] else "png"
-        st.markdown(
-            f'''<div class="logo-cf-supply">
-                <img src="data:image/{ext};base64,{b64}" width="180">
-            </div>''',
-            unsafe_allow_html=True
-        )
+    if os.path.exists("CARGOFLEX.png"):
+        st.image("CARGOFLEX.png", width=250)
 
 cargar_estilos()
 mostrar_logo()
