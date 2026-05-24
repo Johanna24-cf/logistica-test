@@ -632,7 +632,6 @@ df_import, df_recep, df_tiendas = cargar_datos_completos()
 st.title("📦 Gestión de Importaciones")
 menu = st.sidebar.radio("MENÚ PRINCIPAL", [
     "📦 Importaciones",
-    "🚚 Distribución",
     "📊 Dash Despachos",
 ])
 
@@ -640,7 +639,7 @@ menu = st.sidebar.radio("MENÚ PRINCIPAL", [
 # MENÚ: IMPORTACIONES
 # ----------------------------------------------------------
 if menu == "📦 Importaciones":
-    tab_dash, tab_recep, tab_ops = st.tabs(["📊 Dash Importacion", "📑 Gestión interna", "⚙️ Operaciones"])
+    (tab_dash,) = st.tabs(["📊 Dash Importacion"])
 
     with tab_dash:
         st.subheader("🏪 Próximas Aperturas")
@@ -708,69 +707,11 @@ if menu == "📦 Importaciones":
         else:
             st.info("ℹ️ No hay registros con RECUENTO = 1, o la hoja está vacía.")
 
-    with tab_recep:
-        st.markdown("### 🗺️ Dash Recepción")
-        if not df_recep.empty:
-            columnas_recep_req = ["STATUS_REC", "IMPORTACION", "DESTINO", "PROCESO"]
-            if all(col in df_recep.columns for col in columnas_recep_req):
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.info("🚨 **PENDIENTE**")
-                    df_p = df_recep[df_recep["STATUS_REC"].str.upper() == "PENDIENTE"]
-                    if not df_p.empty:
-                        st.dataframe(df_p.groupby(["IMPORTACION", "DESTINO", "PROCESO"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
-                with col2:
-                    st.success("🏢 **EN STOCK**")
-                    df_s = df_recep[df_recep["STATUS_REC"].str.upper() == "ALMACENADO"]
-                    if not df_s.empty:
-                        st.dataframe(df_s.groupby(["IMPORTACION", "DESTINO"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
-                with col3:
-                    st.warning("🚚 **PROGRAMADO / ENTREGADO**")
-                    df_pe = df_recep[df_recep["STATUS_REC"].str.upper().isin(["PROGRAMADO", "ENTREGADO"])]
-                    if not df_pe.empty and "FECHA ENTREGA" in df_recep.columns:
-                        st.dataframe(df_pe.groupby(["FECHA ENTREGA", "IMPORTACION", "STATUS_REC"]).size().reset_index(name="BULTOS"), use_container_width=True, hide_index=True)
-            else:
-                st.warning("⚠️ Estructura incorrecta en la hoja 'RECEPCION_IMPORTACIONES'.")
+    # tab_recep oculto (modo pantalla)
 
-    with tab_ops:
-        st.header("⚙️ Operaciones")
-        @st.fragment
-        def ops_panel():
-            o1, o2 = st.columns(2)
-            with o1:
-                st.subheader("Confirmar Arribo")
-                docs = df_import["NOMBRE CORREO"].unique().tolist() if not df_import.empty and "NOMBRE CORREO" in df_import.columns else []
-                if "STATUS" in df_import.columns:
-                    docs = df_import[df_import["STATUS"] != "ARRIBADO"]["NOMBRE CORREO"].unique().tolist()
-                with st.form("arribo_f", clear_on_submit=True):
-                    d = st.selectbox("Documento", docs)
-                    f = st.date_input("Fecha LLegada", date.today())
-                    if st.form_submit_button("Registrar Arribo"):
-                        if update_consolidado_arribo(d, f):
-                            st.toast("¡Arribo registrado!", icon="✅")
-                            st.cache_data.clear(); st.rerun()
-            with o2:
-                st.subheader("Confirmar Stock")
-                if not df_recep.empty and "STATUS_REC" in df_recep.columns and "ASN" in df_recep.columns:
-                    asns = df_recep[df_recep["STATUS_REC"].str.upper() == "PENDIENTE"]["ASN"].unique().tolist()
-                    with st.form("stock_f", clear_on_submit=True):
-                        a = st.selectbox("ASN", asns)
-                        if st.form_submit_button("Confirmar Ingreso"):
-                            try:
-                                sh_r  = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
-                                w_m   = sh_r.worksheet("MOVIMIENTOS")
-                                cell  = w_m.find(str(a))
-                                w_m.update_cell(cell.row, 6, "ALMACENADO")
-                                st.toast("Stock actualizado", icon="🏢")
-                                st.cache_data.clear(); st.rerun()
-                            except: st.error("ASN no encontrado o error de red")
-        ops_panel()
+    # tab_ops oculto (modo pantalla)
 
-# ----------------------------------------------------------
-# MENÚ: DISTRIBUCIÓN
-# ----------------------------------------------------------
-if menu == "🚚 Distribución":
-    st.info("Módulo de distribución — agrega aquí tu código existente.")
+# MENÚ DISTRIBUCIÓN oculto (modo pantalla)
 
 # ----------------------------------------------------------
 # MENÚ: DASH DESPACHOS
