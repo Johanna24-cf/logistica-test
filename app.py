@@ -271,13 +271,8 @@ def _render_top10(df, n=10):
         .reset_index()
         .sort_values("unidades", ascending=True)
     )
-    top["sku"] = top["sku"].astype(str)  # doble seguro
+    top["sku"] = top["sku"].astype(str)  # siempre string, garantiza unicidad en eje Y
     top["descripcion"] = top["sku"].map(desc_map).fillna("Sin descripción")
-
-    # Etiqueta corta para el eje Y: descripción truncada a 35 chars
-    top["label_eje"] = top["descripcion"].apply(
-        lambda d: d[:35] + "…" if len(d) > 35 else d
-    )
 
     # Escala verde → amarillo
     n_bars = len(top)
@@ -288,17 +283,17 @@ def _render_top10(df, n=10):
 
     fig = go.Figure(go.Bar(
         x=top["unidades"],
-        y=top["label_eje"],          # eje Y = descripción corta
+        y=top["sku"],                # eje Y = SKU (único, evita fusiones por descripción duplicada)
         orientation="h",
         marker=dict(color=colores_barra),
         text=top["unidades"].apply(lambda v: f"{v:,}"),
         textposition="outside",
         textfont=dict(size=12, color="#2d3436"),
-        # Hover completo: SKU + descripción completa + unidades
-        customdata=list(zip(top["sku"], top["descripcion"])),
+        # Tooltip: descripción completa + SKU + unidades
+        customdata=list(zip(top["descripcion"], top["sku"])),
         hovertemplate=(
-            "<b>%{customdata[1]}</b><br>"
-            "🔑 SKU: %{customdata[0]}<br>"
+            "<b>%{customdata[0]}</b><br>"
+            "🔑 SKU: %{customdata[1]}<br>"
             "📦 Unidades: %{x:,}"
             "<extra></extra>"
         ),
