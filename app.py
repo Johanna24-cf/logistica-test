@@ -460,10 +460,18 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
 </script>
 """, unsafe_allow_html=True)
 
-    col_btn, _ = st.columns([1, 4])
-    with col_btn:
-        if st.button("🖥️ Ver en presentación", key=f"btn_{sid}", use_container_width=True):
-            st.markdown(f"<script>window['{sid}_abrir']();</script>", unsafe_allow_html=True)
+    # Botón HTML puro — no pasa por el ciclo rerun de Streamlit
+    st.markdown(f"""
+<div style="margin-top:8px;">
+  <button onclick="window['{sid}_abrir']()"
+    style="background:linear-gradient(135deg,#2d9e6b,#c8e06a);
+           color:#0d1f16;border:none;border-radius:8px;
+           padding:10px 26px;font-size:14px;font-weight:700;
+           cursor:pointer;letter-spacing:0.3px;">
+    &#128250; Ver en presentaci&#243;n
+  </button>
+</div>
+""", unsafe_allow_html=True)
 
 
 def _render_top10(df, n=10):
