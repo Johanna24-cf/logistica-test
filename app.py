@@ -100,6 +100,28 @@ def cargar_estilos():
         /* Divider */
         hr { border-color: #c8e06a !important; }
 
+        /* Modo presentación: oculta todo excepto contenido */
+        body.modo-presentacion header[data-testid="stHeader"]       { display: none !important; }
+        body.modo-presentacion [data-testid="stSidebar"]            { display: none !important; }
+        body.modo-presentacion [data-testid="stToolbar"]            { display: none !important; }
+        body.modo-presentacion [data-testid="stDecoration"]         { display: none !important; }
+        body.modo-presentacion .stButton                            { display: none !important; }
+        body.modo-presentacion [data-testid="stSlider"]             { display: none !important; }
+        body.modo-presentacion .stCheckbox                          { display: none !important; }
+        body.modo-presentacion .titulo-seccion                      { font-size: 2rem !important; }
+        body.modo-presentacion [data-testid="stAppViewBlockContainer"] {
+            padding: 0.5rem 2rem !important;
+        }
+        /* Botón salir presentación: siempre visible */
+        #btn-salir-presentacion {
+            position: fixed; bottom: 18px; right: 18px;
+            z-index: 999999; background: #1a7a4a;
+            color: white; border: none; border-radius: 8px;
+            padding: 8px 18px; font-size: 14px; font-weight: 700;
+            cursor: pointer; display: none;
+        }
+        body.modo-presentacion #btn-salir-presentacion { display: block !important; }
+
         /* Logo CF Supply — fijo esquina superior derecha, encima del header de Streamlit */
         .logo-cf-fixed {
             position: fixed;
@@ -149,6 +171,37 @@ def mostrar_logo_cf_derecha():
 cargar_estilos()
 mostrar_logo_izquierdo()
 mostrar_logo_cf_derecha()
+
+# ── Modo presentación ───────────────────────────────────────────────────────
+st.markdown("""
+<button id="btn-salir-presentacion" onclick="salirPresentacion()">✖ Salir presentación</button>
+<script>
+function entrarPresentacion() {
+    document.body.classList.add('modo-presentacion');
+    localStorage.setItem('modoPresentacion', '1');
+    if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen();
+    }
+}
+function salirPresentacion() {
+    document.body.classList.remove('modo-presentacion');
+    localStorage.removeItem('modoPresentacion');
+    if (document.exitFullscreen) document.exitFullscreen();
+}
+// Restaurar modo al recargar (el carrusel hace st.rerun)
+if (localStorage.getItem('modoPresentacion') === '1') {
+    document.body.classList.add('modo-presentacion');
+}
+// Salir con ESC
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') salirPresentacion();
+});
+</script>
+""", unsafe_allow_html=True)
+
+# Botón de presentación visible en sidebar
+if st.sidebar.button("🖥️ Modo Presentación", key="btn_presentacion"):
+    st.markdown("<script>entrarPresentacion();</script>", unsafe_allow_html=True)
 
 # 3. CONEXIÓN Y CARGA
 @st.cache_resource
