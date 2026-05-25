@@ -339,38 +339,31 @@ def _logos_b64():
 
 
 
+
 def mostrar_seccion_ppt(titulo_seccion, slides):
     """
-    Botón real de Streamlit que abre overlay HTML con carrusel cada 5 seg.
-    slides = [(titulo_slide, fig), ...]  — ignora Nones
+    Botón que abre overlay con carrusel cada 5 seg.
+    Usa plotly JSON nativo — no depende de to_html.
+    slides = [(titulo_slide, fig), ...]
     """
-    import json
+    import plotly.io as pio
 
-    # Filtrar slides inválidos
     slides = [(t, f) for t, f in slides if f is not None]
     if not slides:
         return
 
     logo_izq, logo_der = _logos_b64()
     sid = "ppt_" + str(abs(hash(titulo_seccion)) % 100000)
-
-    # Serializar figs como JSON (sin plotlyjs inline, se carga desde CDN)
-    slides_data = []
-    for t, f in slides:
-        # Forzar dimensiones explícitas para que el HTML sea autónomo
-        f.update_layout(width=1400, height=700, autosize=False)
-        html = f.to_html(
-            include_plotlyjs="cdn",   # incluir Plotly dentro del HTML
-            full_html=True,           # HTML completo y autónomo
-            config={"displayModeBar": False, "responsive": True},
-        )
-        slides_data.append({"titulo": t, "html": html})
-    slides_json = json.dumps(slides_data, ensure_ascii=False)
-
     logo_izq_tag = f'<img src="{logo_izq}" style="height:56px;object-fit:contain;">' if logo_izq else ""
     logo_der_tag = f'<img src="{logo_der}" style="height:56px;object-fit:contain;">' if logo_der else ""
 
-    # Inyectar el overlay + JS siempre (oculto por defecto)
+    # Serializar cada fig como JSON de Plotly (siempre tiene contenido)
+    slides_js_parts = []
+    for t, f in slides:
+        fig_json = pio.to_json(f)
+        slides_js_parts.append(f'{{"titulo": {repr(t)}, "fig": {fig_json}}}')
+    slides_js = "[" + ",".join(slides_js_parts) + "]"
+
     st.markdown(f"""
 <div id="{sid}-ov" style="display:none;position:fixed;inset:0;z-index:99999;
   background:#ffffff;flex-direction:column;align-items:center;
@@ -393,31 +386,36 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
   </div>
 
   <div style="width:100%;height:5px;background:#e8f5ee;border-radius:3px;margin-bottom:10px;">
-    <div id="{sid}-prog" style="height:5px;background:#2d9e6b;border-radius:3px;width:0%;
-         transition:width 0.08s linear;"></div>
+    <div id="{sid}-prog" style="height:5px;background:#2d9e6b;border-radius:3px;
+         width:0%;transition:width 0.08s linear;"></div>
   </div>
 
-  <div id="{sid}-body" style="width:100%;flex:1;min-height:0;overflow:hidden;"></div>
+  <div id="{sid}-body" style="width:100%;flex:1;min-height:0;position:relative;"></div>
 
   <div id="{sid}-dots" style="margin-top:10px;display:flex;gap:10px;"></div>
 </div>
 
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 <script>
 (function(){{
-  var SLIDES = {slides_json};
+  var SLIDES = {slides_js};
   var N = SLIDES.length, idx = 0, timer = null, progTimer = null, DELAY = 5000;
+  var divId = '{sid}-body';
 
   function goTo(i) {{
     idx = i;
     document.getElementById('{sid}-titulo').textContent = SLIDES[i].titulo;
-    var body = document.getElementById('{sid}-body');
-    body.innerHTML = '';
-    var iframe = document.createElement('iframe');
-    iframe.style.cssText = 'width:100%;height:100%;border:none;border-radius:8px;background:#ffffff;';
-    body.appendChild(iframe);
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(SLIDES[i].html);
-    iframe.contentDocument.close();
+
+    var body = document.getElementById(divId);
+    body.innerHTML = '<div id="{sid}-plotdiv" style="width:100%;height:100%;"></div>';
+
+    var layout = Object.assign({{}}, SLIDES[i].fig.layout, {{
+      width: undefined, height: undefined, autosize: true,
+      paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff'
+    }});
+    Plotly.newPlot('{sid}-plotdiv', SLIDES[i].fig.data, layout,
+                  {{responsive: true, displayModeBar: false}});
+
     document.getElementById('{sid}-dots').querySelectorAll('span').forEach(function(d,j){{
       d.style.background = j===i ? '#2d9e6b' : '#c8e06a';
     }});
@@ -454,7 +452,7 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
   }};
 
   document.addEventListener('keydown', function(e){{
-    if(e.key==='Escape') window['{sid}_cerrar'] && window['{sid}_cerrar']();
+    if(e.key==='Escape' && window['{sid}_cerrar']) window['{sid}_cerrar']();
     if(e.key==='ArrowRight'){{ clearInterval(timer); next(); timer=setInterval(next,DELAY); }}
     if(e.key==='ArrowLeft'){{ clearInterval(timer); goTo((idx-1+N)%N); timer=setInterval(next,DELAY); }}
   }});
@@ -462,7 +460,6 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
 </script>
 """, unsafe_allow_html=True)
 
-    # st.button real — al hacer clic dispara el JS del overlay via componente html
     col_btn, _ = st.columns([1, 4])
     with col_btn:
         if st.button("🖥️ Ver en presentación", key=f"btn_{sid}", use_container_width=True):
