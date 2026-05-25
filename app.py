@@ -613,7 +613,7 @@ if menu == "📦 Importaciones":
                     st.dataframe(df_pend, use_container_width=True, hide_index=True)
 
                 with c2:
-                    st.write("### ✅ Arribados")
+                    st.write("### ✅ Arribados en almacén")
                     df_arr = (
                         df_import[df_import["STATUS"] == "ARRIBADO"]
                         .groupby(["NOMBRE CORREO", "FCH LLEGADA"])
