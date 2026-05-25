@@ -342,12 +342,8 @@ def _logos_b64():
 
 
 
+
 def mostrar_seccion_ppt(titulo_seccion, slides):
-    """
-    Genera un HTML completo con todas las slides y lo embebe
-    con st.components — funciona dentro del sandbox de Streamlit.
-    slides = [(titulo, fig_o_html_string), ...]
-    """
     import plotly.io as pio
     import streamlit.components.v1 as components
 
@@ -359,11 +355,9 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
     logo_izq_tag = f'<img src="{logo_izq}" style="height:54px;object-fit:contain;">' if logo_izq else ""
     logo_der_tag = f'<img src="{logo_der}" style="height:54px;object-fit:contain;">' if logo_der else ""
 
-    # Serializar cada fig como JSON de Plotly
     slides_js_parts = []
     for t, f in slides:
         if isinstance(f, str):
-            # Ya es HTML (para tarjetas/tablas)
             slides_js_parts.append(f'{{"titulo":{repr(t)},"tipo":"html","content":{repr(f)}}}')
         else:
             fig_json = pio.to_json(f)
@@ -376,150 +370,174 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
 <meta charset="utf-8">
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 <style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ background: #fff; font-family: Arial, sans-serif; overflow: hidden; }}
-  #slide-wrap {{
-    width: 100vw; height: 100vh; display: flex; flex-direction: column;
-    padding: 20px 40px 16px; background: #fff;
+  * {{ box-sizing:border-box; margin:0; padding:0; }}
+  html, body {{
+    width:100%; height:100%;
+    background:#fff; font-family:Arial,sans-serif; overflow:hidden;
+  }}
+  #wrap {{
+    width:100%; height:100vh;
+    display:flex; flex-direction:column;
+    padding:18px 36px 12px; background:#fff;
   }}
   #hdr {{
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 10px;
+    display:flex; align-items:center;
+    justify-content:space-between; margin-bottom:8px; flex-shrink:0;
   }}
-  #hdr .logo {{ min-width: 140px; }}
-  #hdr .logo-r {{ min-width: 140px; text-align: right; }}
   #titulo {{
-    color: #1a7a4a; font-size: 1.5rem; font-weight: 700;
-    text-align: center; flex: 1; padding: 0 12px;
+    color:#1a7a4a; font-size:1.6rem; font-weight:700;
+    text-align:center; flex:1; padding:0 12px;
   }}
   #progbar-wrap {{
-    width: 100%; height: 5px; background: #e8f5ee;
-    border-radius: 3px; margin-bottom: 10px;
+    width:100%; height:5px; background:#e8f5ee;
+    border-radius:3px; margin-bottom:8px; flex-shrink:0;
   }}
-  #progbar {{
-    height: 5px; background: #2d9e6b; border-radius: 3px; width: 0%;
+  #progbar {{ height:5px; background:#2d9e6b; border-radius:3px; width:0%; }}
+  #body {{
+    flex:1; min-height:0; width:100%; position:relative; overflow:hidden;
   }}
-  #body {{ flex: 1; min-height: 0; width: 100%; overflow: auto; }}
-  #plt   {{ width: 100%; height: 100%; }}
-  #html-content {{ width: 100%; height: 100%; overflow: auto; padding: 10px; }}
+  #plt {{ width:100%; height:100%; }}
+  #html-content {{
+    width:100%; height:100%; overflow:auto; display:none;
+  }}
   #footer {{
-    display: flex; align-items: center; justify-content: space-between;
-    margin-top: 10px;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:8px; flex-shrink:0;
   }}
-  #dots {{ display: flex; gap: 10px; }}
+  #dots {{ display:flex; gap:10px; }}
   #dots span {{
-    width: 11px; height: 11px; border-radius: 50%;
-    display: inline-block; cursor: pointer; background: #c8e06a;
+    width:12px; height:12px; border-radius:50%;
+    display:inline-block; cursor:pointer; background:#c8e06a;
+    transition:background 0.3s;
   }}
-  #nav {{ display: flex; gap: 8px; }}
+  #nav {{ display:flex; gap:8px; }}
   #nav button {{
-    background: transparent; border: 2px solid #2d9e6b; color: #2d9e6b;
-    border-radius: 6px; padding: 4px 12px; font-size: 13px;
-    font-weight: 700; cursor: pointer;
+    background:transparent; border:2px solid #2d9e6b; color:#2d9e6b;
+    border-radius:6px; padding:5px 14px; font-size:13px;
+    font-weight:700; cursor:pointer; transition:all 0.2s;
   }}
-  #nav button:hover {{ background: #2d9e6b; color: #fff; }}
-  #counter {{ color: #636e72; font-size: 13px; }}
+  #nav button:hover {{ background:#2d9e6b; color:#fff; }}
+  #counter {{ color:#636e72; font-size:13px; font-weight:600; }}
 </style>
 </head>
 <body>
-<div id="slide-wrap">
+<div id="wrap">
   <div id="hdr">
-    <div class="logo">{logo_izq_tag}</div>
+    <div style="min-width:150px;">{logo_izq_tag}</div>
     <div id="titulo"></div>
-    <div class="logo-r">{logo_der_tag}</div>
+    <div style="min-width:150px;text-align:right;">{logo_der_tag}</div>
   </div>
   <div id="progbar-wrap"><div id="progbar"></div></div>
   <div id="body">
     <div id="plt"></div>
-    <div id="html-content" style="display:none;"></div>
+    <div id="html-content"></div>
   </div>
   <div id="footer">
     <div id="dots"></div>
     <div id="counter"></div>
     <div id="nav">
-      <button onclick="prev()">&#8592; Ant</button>
-      <button onclick="next()">Sig &#8594;</button>
+      <button onclick="manualPrev()">&#8592; Ant</button>
+      <button onclick="manualNext()">Sig &#8594;</button>
     </div>
   </div>
 </div>
 
 <script>
 var SLIDES = {slides_js};
-var N = SLIDES.length, idx = 0, tmr = null, ptmr = null, DL = 5000;
-
-function buildDots() {{
-  var dts = document.getElementById('dots');
-  dts.innerHTML = '';
-  SLIDES.forEach(function(_, j) {{
-    var d = document.createElement('span');
-    d.id = 'dot-' + j;
-    d.onclick = function() {{ clearInterval(tmr); goTo(j); tmr = setInterval(next, DL); }};
-    dts.appendChild(d);
-  }});
-}}
+var N=SLIDES.length, idx=0, tmr=null, ptmr=null, DL=5000;
 
 function goTo(i) {{
   idx = i;
   document.getElementById('titulo').textContent = SLIDES[i].titulo;
-  document.getElementById('counter').textContent = (i+1) + ' / ' + N;
+  document.getElementById('counter').textContent = (i+1)+' / '+N;
 
-  // Dots
-  document.querySelectorAll('#dots span').forEach(function(d, j) {{
-    d.style.background = j === i ? '#2d9e6b' : '#c8e06a';
-  }});
-
-  // Contenido
-  var plt = document.getElementById('plt');
+  var plt     = document.getElementById('plt');
   var htmlDiv = document.getElementById('html-content');
 
   if (SLIDES[i].tipo === 'plotly') {{
-    plt.style.display = 'block';
+    plt.style.display     = 'block';
     htmlDiv.style.display = 'none';
-    var lay = Object.assign({{}}, SLIDES[i].fig.layout, {{
-      autosize: true, width: undefined, height: undefined,
-      paper_bgcolor: '#fff', plot_bgcolor: '#fff'
+    var body   = document.getElementById('body');
+    var W      = body.clientWidth;
+    var H      = body.clientHeight;
+    var base   = SLIDES[i].fig.layout || {{}};
+    var lay    = Object.assign({{}}, base, {{
+      autosize        : false,
+      width           : W,
+      height          : H,
+      paper_bgcolor   : '#ffffff',
+      plot_bgcolor    : '#ffffff',
+      margin          : {{ l:60, r:40, t:30, b:60 }},
+      font            : {{ family:'Arial', size:13 }}
     }});
-    Plotly.react('plt', SLIDES[i].fig.data, lay, {{responsive: true, displayModeBar: false}});
+    Plotly.react('plt', SLIDES[i].fig.data, lay,
+                 {{displayModeBar:false, responsive:false}});
   }} else {{
-    plt.style.display = 'none';
+    plt.style.display     = 'none';
     htmlDiv.style.display = 'block';
-    htmlDiv.innerHTML = SLIDES[i].content;
+    htmlDiv.innerHTML     = SLIDES[i].content;
   }}
 
-  // Barra progreso
+  document.querySelectorAll('#dots span').forEach(function(d,j){{
+    d.style.background = j===i ? '#2d9e6b' : '#c8e06a';
+  }});
+
   clearInterval(ptmr);
-  var prg = document.getElementById('progbar'), t0 = Date.now();
-  prg.style.width = '0%';
-  ptmr = setInterval(function() {{
-    prg.style.width = Math.min(100, (Date.now()-t0)/DL*100) + '%';
-  }}, 50);
+  var prg=document.getElementById('progbar'), t0=Date.now();
+  prg.style.width='0%';
+  ptmr=setInterval(function(){{
+    prg.style.width=Math.min(100,(Date.now()-t0)/DL*100)+'%';
+  }},50);
 }}
 
-function next() {{ goTo((idx+1) % N); }}
-function prev() {{ goTo((idx-1+N) % N); }}
+function next(){{ goTo((idx+1)%N); }}
+function prev(){{ goTo((idx-1+N)%N); }}
+function manualNext(){{ clearInterval(tmr); next(); tmr=setInterval(next,DL); }}
+function manualPrev(){{ clearInterval(tmr); prev(); tmr=setInterval(next,DL); }}
 
-document.addEventListener('keydown', function(e) {{
-  if (e.key === 'ArrowRight') {{ clearInterval(tmr); next(); tmr = setInterval(next, DL); }}
-  if (e.key === 'ArrowLeft')  {{ clearInterval(tmr); prev(); tmr = setInterval(next, DL); }}
+// Construir dots
+(function(){{
+  var dts=document.getElementById('dots');
+  SLIDES.forEach(function(_,j){{
+    var d=document.createElement('span');
+    d.onclick=function(){{ clearInterval(tmr); goTo(j); tmr=setInterval(next,DL); }};
+    dts.appendChild(d);
+  }});
+}})();
+
+// Teclado
+document.addEventListener('keydown',function(e){{
+  if(e.key==='ArrowRight') manualNext();
+  if(e.key==='ArrowLeft')  manualPrev();
 }});
 
-buildDots();
+// Arrancar
 goTo(0);
-tmr = setInterval(next, DL);
+tmr=setInterval(next,DL);
+
+// Fullscreen al cargar (necesita interacción del usuario, lo pedimos al padre)
+window.addEventListener('message', function(e){{
+  if(e.data==='requestFullscreen'){{
+    document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+  }}
+}});
 </script>
 </body>
 </html>"""
 
-    # Mostrar botón que expande el componente
     key = f"ppt_show_{abs(hash(titulo_seccion)) % 100000}"
     if key not in st.session_state:
         st.session_state[key] = False
 
-    if st.button(f"🖥️ Ver presentación: {titulo_seccion}", key=f"btn_{key}"):
+    label = "⬇️ Cerrar presentación" if st.session_state[key] else "🖥️ Ver presentación"
+    if st.button(f"{label}: {titulo_seccion}", key=f"btn_{key}"):
         st.session_state[key] = not st.session_state[key]
+        st.rerun()
 
     if st.session_state[key]:
-        components.html(html_completo, height=700, scrolling=False)
+        # Altura = ventana completa menos el header de Streamlit (~80px)
+        # scrolling=False + CSS height:100vh dentro del iframe hace fullscreen real
+        components.html(html_completo, height=860, scrolling=False)
 
 
 def _render_top10(df, n=10):
