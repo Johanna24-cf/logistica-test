@@ -476,17 +476,19 @@ function goTo(i) {{
     var base=SLIDES[i].fig.layout||{{}};
     // Detectar si es heatmap (imshow tiene 'heatmap' en el tipo)
     var isHeatmap = SLIDES[i].fig.data && SLIDES[i].fig.data[0] && SLIDES[i].fig.data[0].type==='heatmap';
+    var isScatter = SLIDES[i].fig.data && SLIDES[i].fig.data[0] && SLIDES[i].fig.data[0].type==='scatter';
     var mg = isHeatmap
-      ? {{l:160, r:20, t:50, b:20}}
-      : {{l:20,  r:20, t:60, b:60}};
-    // Para scatter: mantener labels sobre puntos, quitar eje Y
+      ? {{l:160, r:20,  t:50, b:20}}
+      : (isScatter
+        ? {{l:20,  r:20,  t:60, b:60}}   // evolutivo: sin eje Y, labels sobre puntos
+        : {{l:160, r:100, t:30, b:40}}); // bar/top10: eje Y visible, margen derecho para labels
+    // Ajustar datos según tipo
     var figData = SLIDES[i].fig.data.map(function(trace) {{
-      if (!isHeatmap && trace.type !== 'heatmap') {{
+      if (isScatter) {{
+        // Evolutivo: labels sobre puntos, sin eje Y
         var t = Object.assign({{}}, trace);
-        // Asegurar mode con text
         if (t.mode && t.mode.indexOf('text') === -1) t.mode = t.mode + '+text';
         if (!t.mode) t.mode = 'lines+markers+text';
-        // Formatear labels con separador de miles
         if (t.y && t.y.length) {{
           t.text = t.y.map(function(v) {{
             return typeof v === 'number' ? v.toLocaleString('es-PE') : (v||'');
@@ -496,7 +498,7 @@ function goTo(i) {{
         t.textfont = {{size: 13, color: '#1a7a4a', family: 'Arial'}};
         return t;
       }}
-      return trace;
+      return trace; // bar y heatmap: sin cambios
     }});
     var lay=Object.assign({{}},base,{{
       autosize:false, width:W, height:H,
@@ -505,10 +507,12 @@ function goTo(i) {{
       font:{{family:'Arial',size:13}},
       yaxis: isHeatmap
         ? Object.assign({{}}, base.yaxis||{{}}, {{title:'', tickfont:{{size:11.5}}}})
-        : Object.assign({{}}, base.yaxis||{{}}, {{visible:false, showticklabels:false, showgrid:false, zeroline:false}}),
+        : (isScatter
+          ? Object.assign({{}}, base.yaxis||{{}}, {{visible:false, showticklabels:false, showgrid:false, zeroline:false}})
+          : (base.yaxis||{{}})),
       xaxis: isHeatmap
         ? Object.assign({{}}, base.xaxis||{{}}, {{title:'', tickfont:{{size:13}}, side:'top'}})
-        : Object.assign({{}}, base.xaxis||{{}}, {{tickfont:{{size:14}}, showgrid:false}})
+        : Object.assign({{}}, base.xaxis||{{}}, {{tickfont:{{size:13}}, showgrid:false}})
     }});
     Plotly.react('plt-div', isHeatmap ? SLIDES[i].fig.data : figData, lay, {{displayModeBar:false,responsive:false}});
   }} else {{
@@ -916,14 +920,16 @@ if menu == "📦 Importaciones":
         st.divider()
 
         # Slide 1: tarjetas aperturas
-        # ── SLIDE 1: Próximas Aperturas ────────────────────────────────────
+        # ══════════════════════════════════════════════════════
+        # SLIDE 1: Próximas Aperturas — cards 2x2
+        # ══════════════════════════════════════════════════════
         def _card_ap(tienda, desc, fecha):
             return (
-                '<div style="background:#fff;border-radius:16px;border-top:6px solid #2d9e6b;'
+                '<div style="background:#fff;border-radius:16px;border-left:6px solid #2d9e6b;'
                 'padding:28px 30px;box-shadow:0 4px 16px rgba(45,158,107,0.13);'
                 'display:flex;flex-direction:column;justify-content:space-between;">'
                 '<div>'
-                '<div style="color:#1a7a4a;font-size:1.5rem;font-weight:800;margin-bottom:10px;line-height:1.2;">🏪 ' + tienda + '</div>'
+                '<div style="color:#1a7a4a;font-size:1.5rem;font-weight:800;margin-bottom:10px;">🏪 ' + tienda + '</div>'
                 '<div style="color:#636e72;font-size:1.05em;line-height:1.5;">' + desc + '</div>'
                 '</div>'
                 '<div style="color:#e8a020;font-weight:700;font-size:1.1em;margin-top:20px;'
@@ -935,18 +941,20 @@ if menu == "📦 Importaciones":
         if not df_tiendas.empty and all(c in df_tiendas.columns for c in ["ESTADO","FCH ESTIMADA","TIENDA","DESCRIPCION"]):
             df_ap2 = df_tiendas[df_tiendas["ESTADO"].str.upper().str.contains("PENDIENTE", na=False)].copy()
             df_ap2["FCH_DT"] = pd.to_datetime(df_ap2["FCH ESTIMADA"], dayfirst=True, errors="coerce")
-            df_ap2 = df_ap2[df_ap2["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(6)
+            df_ap2 = df_ap2[df_ap2["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
             cards = "".join(_card_ap(str(r["TIENDA"]), str(r["DESCRIPCION"]), str(r.get("FCH ESTIMADA",""))) for _, r in df_ap2.iterrows())
             apertura_slide = (
-                '<div style="width:100%;height:100vh;padding:20px 28px;background:#f0faf4;'
+                '<div style="width:100%;height:100vh;padding:20px 28px 16px;background:linear-gradient(135deg,#f0faf4,#e8f5ee);'
                 'font-family:Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;gap:14px;">'
-                '<div style="font-size:11px;font-weight:700;color:#2d9e6b;text-transform:uppercase;letter-spacing:1.2px;">🏪 Próximas Aperturas de Tiendas</div>'
-                '<div style="display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);gap:16px;flex:1;min-height:0;">'
-                + cards +
-                '</div></div>'
+                '<div style="font-size:11px;font-weight:700;color:#2d9e6b;text-transform:uppercase;letter-spacing:1.5px;flex-shrink:0;">'
+                '🏪 Próximas Aperturas de Tiendas</div>'
+                '<div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:16px;flex:1;min-height:0;">'
+                + cards + '</div></div>'
             )
 
-        # ── SLIDE 2: Status Global — dashboard visual tipo Power BI ─────────
+        # ══════════════════════════════════════════════════════
+        # SLIDE 2: Status Global — Power BI style
+        # ══════════════════════════════════════════════════════
         status_slide = ""
         if not df_import.empty and all(c in df_import.columns for c in ["NOMBRE CORREO","STATUS","HORA FECH","FCH LLEGADA"]):
             total_i = df_import["NOMBRE CORREO"].nunique()
@@ -966,17 +974,18 @@ if menu == "📦 Importaciones":
             df_arr2 = df_arr2.sort_values("_f", ascending=False, na_position="last").drop(columns=["_f"])
             df_arr2 = df_arr2[df_arr2.apply(lambda row: any(str(v).strip() not in ('','nan','None') for v in row), axis=1)]
 
+            # Tabla HTML
             def _tbl(df, mx=20):
                 df = df.head(mx)
                 heads = "".join(
-                    '<th style="padding:7px 10px;background:#2d9e6b;color:#fff;font-size:12px;'
-                    'font-weight:700;text-align:left;position:sticky;top:0;z-index:1;font-size:13px;">' + str(c) + '</th>'
+                    '<th style="padding:9px 12px;background:#2d9e6b;color:#fff;font-size:12.5px;'
+                    'font-weight:700;text-align:left;position:sticky;top:0;z-index:1;">' + str(c) + '</th>'
                     for c in df.columns
                 )
                 rows = "".join(
-                    '<tr>' +
-                    "".join(
-                        '<td style="padding:8px 12px;border-bottom:1px solid #f0faf4;font-size:13px;color:#2d3436;">' + str(v) + '</td>'
+                    '<tr>' + "".join(
+                        '<td style="padding:8px 12px;border-bottom:1px solid #f0faf4;'
+                        'font-size:12.5px;color:#2d3436;">' + str(v) + '</td>'
                         for v in r
                     ) + '</tr>' for r in df.values
                 )
@@ -984,67 +993,108 @@ if menu == "📦 Importaciones":
                         '<thead><tr>' + heads + '</tr></thead>'
                         '<tbody>' + rows + '</tbody></table>')
 
-            # Barra circular SVG para % completado
-            r_svg, cx, cy = 54, 60, 60
+            # Donut SVG
+            r_svg, cx, cy = 52, 58, 58
             circ = 2 * 3.14159 * r_svg
             dash = circ * pct / 100
             svg_donut = (
-                f'<svg width="120" height="120" viewBox="0 0 120 120">'
-                f'<circle cx="{cx}" cy="{cy}" r="{r_svg}" fill="none" stroke="#e8f5ee" stroke-width="14"/>'
-                f'<circle cx="{cx}" cy="{cy}" r="{r_svg}" fill="none" stroke="url(#g)" stroke-width="14"'
-                f' stroke-dasharray="{dash:.1f} {circ:.1f}" stroke-linecap="round"'
-                f' transform="rotate(-90 {cx} {cy})"/>'
-                f'<defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="0%">'
+                f'<svg width="116" height="116" viewBox="0 0 116 116">'
+                f'<circle cx="{cx}" cy="{cy}" r="{r_svg}" fill="none" stroke="#e0f2e9" stroke-width="13"/>'
+                f'<circle cx="{cx}" cy="{cy}" r="{r_svg}" fill="none" '
+                f'stroke="url(#grad)" stroke-width="13" '
+                f'stroke-dasharray="{dash:.1f} {circ:.1f}" stroke-linecap="round" '
+                f'transform="rotate(-90 {cx} {cy})"/>'
+                f'<defs><linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">'
                 f'<stop offset="0%" style="stop-color:#2d9e6b"/>'
                 f'<stop offset="100%" style="stop-color:#c8e06a"/>'
                 f'</linearGradient></defs>'
-                f'<text x="{cx}" y="{cy+6}" text-anchor="middle" font-size="20" font-weight="800" fill="#1a7a4a">{pct}%</text>'
+                f'<text x="{cx}" y="{cy-4}" text-anchor="middle" font-size="18" font-weight="900" fill="#1a7a4a">{pct}%</text>'
+                f'<text x="{cx}" y="{cy+14}" text-anchor="middle" font-size="9" fill="#888">COMPLETADO</text>'
                 f'</svg>'
             )
 
-            def _kpi(val, label, color, sub=""):
+            # Barra horizontal de progreso tipo Power BI
+            bar_pct = f'<div style="height:10px;background:#e0f2e9;border-radius:5px;overflow:hidden;margin-top:8px;">'                       f'<div style="height:10px;width:{pct}%;background:linear-gradient(90deg,#2d9e6b,#c8e06a);border-radius:5px;"></div></div>'
+
+            # KPI card
+            def _kpi(val, label, sublabel, border_color, extra=""):
                 return (
-                    '<div style="background:#fff;border-radius:14px;border-left:5px solid ' + color + ';'
-                    'padding:18px 20px;box-shadow:0 2px 8px rgba(45,158,107,.1);display:flex;flex-direction:column;justify-content:center;">'
-                    '<div style="color:#aaa;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;">' + label + '</div>'
-                    '<div style="color:#1a7a4a;font-size:3rem;font-weight:900;line-height:1.05;">' + str(val) + '</div>'
-                    + (f'<div style="color:#aaa;font-size:11px;margin-top:4px;">{sub}</div>' if sub else '') +
-                    '</div>'
+                    '<div style="background:#fff;border-radius:14px;border-top:5px solid ' + border_color + ';'
+                    'padding:20px 22px;box-shadow:0 2px 10px rgba(0,0,0,.07);display:flex;flex-direction:column;justify-content:center;">'
+                    '<div style="color:#aaa;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">' + label + '</div>'
+                    '<div style="color:#1a7a4a;font-size:2.8rem;font-weight:900;line-height:1.0;margin:4px 0;">' + str(val) + '</div>'
+                    '<div style="color:#888;font-size:11.5px;">' + sublabel + '</div>'
+                    + extra + '</div>'
                 )
 
-            kpis = (
-                _kpi(total_i, "Total Docs", "#2d9e6b") +
-                _kpi(arr_i, "Arribados", "#3dbb7e", f"{pct}% del total") +
-                _kpi(trans_i, "En Tránsito", "#e8d44d") +
-                '<div style="background:#fff;border-radius:14px;border-left:5px solid #c8e06a;'
-                'padding:18px 20px;box-shadow:0 2px 8px rgba(45,158,107,.1);display:flex;align-items:center;gap:12px;">'
-                + svg_donut +
-                '<div><div style="color:#aaa;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;">Completado</div>'
-                '<div style="color:#1a7a4a;font-size:1rem;font-weight:700;margin-top:4px;">' + str(arr_i) + ' de ' + str(total_i) + ' docs</div></div></div>'
-            )
-
-            def _panel(title, badge_color, badge_text, tbl_html):
-                return (
-                    '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
-                    'box-shadow:0 2px 8px rgba(45,158,107,.08);display:flex;flex-direction:column;min-height:0;height:100%;">'
-                    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
-                    '<span style="font-size:15px;font-weight:700;color:#1a7a4a;">' + title + '</span>'
-                    '<span style="background:' + badge_color + ';color:#fff;border-radius:20px;'
-                    'padding:2px 10px;font-size:11px;font-weight:700;">' + badge_text + '</span></div>'
-                    '<div style="overflow-y:auto;flex:1;">' + tbl_html + '</div>'
-                    '</div>'
+            # Status bar chart por status (pendientes)
+            status_counts = df_import[df_import["STATUS"]!="ARRIBADO"]["STATUS"].value_counts()
+            bar_items = ""
+            colors_map = {"ADUANAS":"#e8a020","EN TRÁNSITO":"#3dbb7e","ORIGEN":"#6c8ebf","":"#ccc"}
+            max_val = status_counts.max() if len(status_counts) else 1
+            for st, cnt in status_counts.items():
+                color = colors_map.get(str(st).upper(), "#aaa")
+                w = int(cnt / max_val * 100)
+                bar_items += (
+                    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+                    '<div style="width:100px;font-size:12px;color:#555;font-weight:600;text-align:right;">' + str(st) + '</div>'
+                    '<div style="flex:1;height:28px;background:#f5f5f5;border-radius:6px;overflow:hidden;">'
+                    '<div style="height:28px;width:' + str(w) + '%;background:' + color + ';border-radius:6px;'
+                    'display:flex;align-items:center;padding-left:10px;">'
+                    '<span style="color:#fff;font-size:12px;font-weight:700;">' + str(cnt) + '</span></div></div></div>'
                 )
 
             status_slide = (
-                '<div style="width:100%;height:100vh;padding:18px 24px;background:#f0faf4;'
+                '<div style="width:100%;height:100vh;padding:16px 22px;'
+                'background:linear-gradient(135deg,#f0faf4,#e8f5ee);'
                 'font-family:Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;">'
-                # KPIs
-                '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;flex-shrink:0;">' + kpis + '</div>'
-                # Tablas
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1;min-height:0;height:100%;">'
-                + _panel("⏳ Pendientes", "#e8a020", str(len(df_pend2)) + " docs", _tbl(df_pend2))
-                + _panel("✅ Arribados",  "#2d9e6b", str(len(df_arr2)) + " docs",  _tbl(df_arr2))
-                + '</div></div>'
+
+                # ── Fila 1: 4 KPIs ──
+                '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;flex-shrink:0;">'
+                + _kpi(total_i, "Total Docs", "Importaciones registradas", "#2d9e6b")
+                + _kpi(arr_i, "Arribados", str(pct)+"% del total", "#3dbb7e", bar_pct)
+                + _kpi(trans_i, "En Tránsito", "Pendientes de llegar", "#e8d44d")
+                + ('<div style="background:#fff;border-radius:14px;border-top:5px solid #c8e06a;'
+                   'padding:20px 22px;box-shadow:0 2px 10px rgba(0,0,0,.07);'
+                   'display:flex;align-items:center;gap:16px;">'
+                   + svg_donut +
+                   '<div><div style="color:#aaa;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Avance</div>'
+                   '<div style="color:#1a7a4a;font-size:1.3rem;font-weight:800;margin-top:4px;">' + str(arr_i) + ' de ' + str(total_i) + ' docs</div>'
+                   '<div style="color:#888;font-size:11.5px;margin-top:2px;">importaciones completadas</div></div></div>')
+                + '</div>'
+
+                # ── Fila 2: status bars + tablas ──
+                '<div style="display:grid;grid-template-columns:300px 1fr 1fr;gap:12px;flex:1;min-height:0;">'
+
+                # Status bars (col 1)
+                + '<div style="background:#fff;border-radius:14px;padding:16px 18px;'
+                'box-shadow:0 2px 10px rgba(0,0,0,.07);display:flex;flex-direction:column;">'
+                '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:14px;">📊 Status Pendientes</div>'
+                + bar_items +
+                '</div>'
+
+                # Tabla Pendientes (col 2)
+                + '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
+                'box-shadow:0 2px 10px rgba(0,0,0,.07);display:flex;flex-direction:column;">'
+                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-shrink:0;">'
+                '<span style="font-size:14px;font-weight:700;color:#1a7a4a;">⏳ Pendientes</span>'
+                '<span style="background:#e8a020;color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;">'
+                + str(len(df_pend2)) + ' docs</span></div>'
+                '<div style="overflow-y:auto;flex:1;">' + _tbl(df_pend2) + '</div>'
+                '</div>'
+
+                # Tabla Arribados (col 3)
+                + '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
+                'box-shadow:0 2px 10px rgba(0,0,0,.07);display:flex;flex-direction:column;">'
+                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-shrink:0;">'
+                '<span style="font-size:14px;font-weight:700;color:#1a7a4a;">✅ Arribados</span>'
+                '<span style="background:#2d9e6b;color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;">'
+                + str(len(df_arr2)) + ' docs</span></div>'
+                '<div style="overflow-y:auto;flex:1;">' + _tbl(df_arr2) + '</div>'
+                '</div>'
+
+                + '</div>'  # fila 2
+                + '</div>'  # wrap
             )
 
         slides_imp = []
