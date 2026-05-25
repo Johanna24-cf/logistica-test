@@ -367,7 +367,7 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
             slides_js_parts.append('{"titulo":' + _json.dumps(t) + ',"tipo":"plotly","fig":' + fig_json + '}')
     slides_js = "[" + ",".join(slides_js_parts) + "]"
 
-    html_completo = f"""<!DOCTYPE html>
+    html_completo = """<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -437,9 +437,9 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
 <div id="wrap">
 
   <div id="hdr">
-    <div class="logo-w">{logo_izq_tag}</div>
+    <div class="logo-w">__LOGO_IZQ__</div>
     <div id="titulo"></div>
-    <div class="logo-w r">{logo_der_tag}</div>
+    <div class="logo-w r">__LOGO_DER__</div>
   </div>
 
   <div id="pw"><div id="pb"></div></div>
@@ -461,7 +461,7 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
 
 </div>
 <script>
-var SLIDES={slides_js}, N=SLIDES.length, idx=0, tmr=null, ptmr=null, DL=5000;
+var SLIDES=__SLIDES_JS__, N=SLIDES.length, idx=0, tmr=null, ptmr=null, DL=5000;
 
 function goTo(i) {{
   idx=i;
@@ -583,6 +583,11 @@ document.addEventListener('keydown',function(e){{
 </script>
 </body>
 </html>"""
+    html_completo = (html_completo
+        .replace("__SLIDES_JS__", slides_js)
+        .replace("__LOGO_IZQ__", logo_izq_tag)
+        .replace("__LOGO_DER__", logo_der_tag)
+    )
 
     # Key estable: limpiar título a solo alfanumérico
     import re as _re
