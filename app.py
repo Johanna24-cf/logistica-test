@@ -9,7 +9,6 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import date, datetime
 import os
 import base64
-import time
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -100,27 +99,40 @@ def cargar_estilos():
         /* Divider */
         hr { border-color: #c8e06a !important; }
 
-        /* Modo presentación: oculta todo excepto contenido */
-        body.modo-presentacion header[data-testid="stHeader"]       { display: none !important; }
-        body.modo-presentacion [data-testid="stSidebar"]            { display: none !important; }
-        body.modo-presentacion [data-testid="stToolbar"]            { display: none !important; }
-        body.modo-presentacion [data-testid="stDecoration"]         { display: none !important; }
-        body.modo-presentacion .stButton                            { display: none !important; }
-        body.modo-presentacion [data-testid="stSlider"]             { display: none !important; }
-        body.modo-presentacion .stCheckbox                          { display: none !important; }
-        body.modo-presentacion .titulo-seccion                      { font-size: 2rem !important; }
-        body.modo-presentacion [data-testid="stAppViewBlockContainer"] {
-            padding: 0.5rem 2rem !important;
+        /* ── Overlay presentación tipo PPT ── */
+        #ppt-overlay {
+            display: none;
+            position: fixed; inset: 0; z-index: 99999;
+            background: #0d1f16;
+            flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 32px 48px; box-sizing: border-box;
         }
-        /* Botón salir presentación: siempre visible */
-        #btn-salir-presentacion {
-            position: fixed; bottom: 18px; right: 18px;
-            z-index: 999999; background: #1a7a4a;
-            color: white; border: none; border-radius: 8px;
-            padding: 8px 18px; font-size: 14px; font-weight: 700;
-            cursor: pointer; display: none;
+        #ppt-overlay.activo { display: flex; }
+        #ppt-header {
+            width: 100%; display: flex;
+            align-items: center; justify-content: space-between;
+            margin-bottom: 18px;
         }
-        body.modo-presentacion #btn-salir-presentacion { display: block !important; }
+        #ppt-header img { height: 56px; object-fit: contain; }
+        #ppt-titulo {
+            color: #c8e06a; font-size: 1.8rem; font-weight: 700;
+            text-align: center; flex: 1; padding: 0 24px;
+            font-family: Arial, sans-serif;
+        }
+        #ppt-body { width: 100%; flex: 1; min-height: 0; }
+        #ppt-body iframe {
+            width: 100%; height: 100%; border: none;
+            border-radius: 12px; background: #0d1f16;
+        }
+        #ppt-cerrar {
+            position: absolute; top: 16px; right: 24px;
+            background: transparent; border: 2px solid #c8e06a;
+            color: #c8e06a; border-radius: 8px;
+            padding: 6px 16px; font-size: 14px; font-weight: 700;
+            cursor: pointer; z-index: 100000;
+        }
+        #ppt-cerrar:hover { background: #c8e06a; color: #0d1f16; }
 
         /* Logo CF Supply — fijo esquina superior derecha, encima del header de Streamlit */
         .logo-cf-fixed {
@@ -172,355 +184,133 @@ cargar_estilos()
 mostrar_logo_izquierdo()
 mostrar_logo_cf_derecha()
 
-# ── Modo presentación ───────────────────────────────────────────────────────
-st.markdown("""
-<button id="btn-salir-presentacion" onclick="salirPresentacion()">✖ Salir presentación</button>
+# ── Overlay PPT: contenedor fijo con logos + título + gráfico ──────────────
+def _logos_b64():
+    """Devuelve (b64_carcasas, b64_cargoflex) como data URIs o '' si no existen."""
+    def _b64(path):
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+        return ""
+    return _b64("CARCASAS.png"), _b64("CARGOFLEX.png")
+
+
+def mostrar_seccion_ppt(titulo_seccion, slides):
+    """
+    Un solo botón que abre overlay con carrusel cada 5 seg.
+    slides = [(titulo_slide, fig), ...]
+    """
+    import json
+    logo_izq, logo_der = _logos_b64()
+    sid = "ppt_" + str(abs(hash(titulo_seccion)) % 100000)
+
+    slides_data = []
+    for t, f in slides:
+        html = f.to_html(include_plotlyjs=False, full_html=False,
+                         config={"displayModeBar": False})
+        slides_data.append({"titulo": t, "html": html})
+
+    slides_json = json.dumps(slides_data, ensure_ascii=False)
+
+    logo_izq_tag = f'<img src="{logo_izq}" style="height:56px;object-fit:contain;">' if logo_izq else ""
+    logo_der_tag = f'<img src="{logo_der}" style="height:56px;object-fit:contain;">' if logo_der else ""
+
+    st.markdown(f"""
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+
+<div id="{sid}-ov" style="display:none;position:fixed;inset:0;z-index:99999;
+  background:#ffffff;flex-direction:column;align-items:center;
+  justify-content:flex-start;padding:24px 40px 20px;box-sizing:border-box;
+  font-family:Arial,sans-serif;">
+
+  <button onclick="pptCerrar_{sid}()"
+    style="position:absolute;top:14px;right:20px;background:transparent;
+           border:2px solid #2d9e6b;color:#2d9e6b;border-radius:8px;
+           padding:5px 14px;font-size:13px;font-weight:700;cursor:pointer;">
+    &#x2716; Cerrar
+  </button>
+
+  <div style="width:100%;display:flex;align-items:center;
+              justify-content:space-between;margin-bottom:10px;">
+    <div style="min-width:140px;">{logo_izq_tag}</div>
+    <div id="{sid}-titulo" style="color:#1a7a4a;font-size:1.6rem;font-weight:700;
+         text-align:center;flex:1;padding:0 16px;"></div>
+    <div style="min-width:140px;text-align:right;">{logo_der_tag}</div>
+  </div>
+
+  <div style="width:100%;height:5px;background:#e8f5ee;border-radius:3px;margin-bottom:10px;">
+    <div id="{sid}-prog" style="height:5px;background:#2d9e6b;border-radius:3px;
+         width:0%;transition:width 0.08s linear;"></div>
+  </div>
+
+  <div id="{sid}-body" style="width:100%;flex:1;min-height:0;overflow:hidden;"></div>
+
+  <div id="{sid}-dots" style="margin-top:10px;display:flex;gap:10px;"></div>
+</div>
+
 <script>
-function entrarPresentacion() {
-    document.body.classList.add('modo-presentacion');
-    localStorage.setItem('modoPresentacion', '1');
-    if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen();
-    }
-}
-function salirPresentacion() {
-    document.body.classList.remove('modo-presentacion');
-    localStorage.removeItem('modoPresentacion');
-    if (document.exitFullscreen) document.exitFullscreen();
-}
-// Restaurar modo al recargar (el carrusel hace st.rerun)
-if (localStorage.getItem('modoPresentacion') === '1') {
-    document.body.classList.add('modo-presentacion');
-}
-// Salir con ESC
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') salirPresentacion();
-});
+(function(){{
+  var SLIDES = {slides_json};
+  var N = SLIDES.length;
+  var idx = 0, timer = null, progTimer = null, DELAY = 5000;
+
+  function goTo(i) {{
+    idx = i;
+    document.getElementById('{sid}-titulo').textContent = SLIDES[i].titulo;
+    document.getElementById('{sid}-body').innerHTML = SLIDES[i].html;
+    document.getElementById('{sid}-dots').querySelectorAll('span').forEach(function(d,j){{
+      d.style.background = j===i ? '#2d9e6b' : '#c8e06a';
+    }});
+    clearInterval(progTimer);
+    var prog = document.getElementById('{sid}-prog');
+    prog.style.width = '0%';
+    var start = Date.now();
+    progTimer = setInterval(function(){{
+      var p = Math.min(100, (Date.now()-start)/DELAY*100);
+      prog.style.width = p + '%';
+    }}, 50);
+  }}
+
+  function next(){{ goTo((idx+1)%N); }}
+
+  window['pptAbrir_{sid}'] = function(){{
+    var ov = document.getElementById('{sid}-ov');
+    ov.style.display = 'flex';
+    var dotsEl = document.getElementById('{sid}-dots');
+    dotsEl.innerHTML = '';
+    SLIDES.forEach(function(_,j){{
+      var d = document.createElement('span');
+      d.style.cssText = 'width:11px;height:11px;border-radius:50%;display:inline-block;cursor:pointer;';
+      d.onclick = function(){{ clearInterval(timer); goTo(j); timer=setInterval(next,DELAY); }};
+      dotsEl.appendChild(d);
+    }});
+    goTo(0);
+    timer = setInterval(next, DELAY);
+    if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+  }};
+
+  window['pptCerrar_{sid}'] = function(){{
+    clearInterval(timer); clearInterval(progTimer);
+    document.getElementById('{sid}-ov').style.display='none';
+    if(document.exitFullscreen) document.exitFullscreen();
+  }};
+
+  document.addEventListener('keydown', function(e){{
+    var fn = window['pptCerrar_{sid}'];
+    if(e.key==='Escape' && fn) fn();
+    if(e.key==='ArrowRight'){{ clearInterval(timer); next(); timer=setInterval(next,DELAY); }}
+    if(e.key==='ArrowLeft'){{ clearInterval(timer); goTo((idx-1+N)%N); timer=setInterval(next,DELAY); }}
+  }});
+}})();
 </script>
+
+<button onclick="window['pptAbrir_{sid}']()"
+  style="background:linear-gradient(135deg,#2d9e6b,#c8e06a);
+         color:#0d1f16;border:none;border-radius:8px;
+         padding:9px 24px;font-size:14px;font-weight:700;cursor:pointer;">
+  &#128250; Ver en presentaci&#243;n
+</button>
 """, unsafe_allow_html=True)
-
-# Botón de presentación visible en sidebar
-if st.sidebar.button("🖥️ Modo Presentación", key="btn_presentacion"):
-    st.markdown("<script>entrarPresentacion();</script>", unsafe_allow_html=True)
-
-# 3. CONEXIÓN Y CARGA
-@st.cache_resource
-def conectar_google():
-    try:
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
-        return gspread.authorize(creds)
-    except Exception as e:
-        st.error(f"Error de conexión: {e}"); return None
-
-client = conectar_google()
-
-def abrir_archivo_dinamico(nombre_o_id):
-    if len(nombre_o_id) > 25:
-        return client.open_by_key(nombre_o_id)
-    return client.open(nombre_o_id)
-
-@st.cache_data(ttl=600)
-def cargar_datos_completos():
-    def fetch(nombre_o_id, hoja=None):
-        try:
-            sh = abrir_archivo_dinamico(nombre_o_id)
-            wks = sh.worksheet(hoja) if hoja else sh.sheet1
-            data = wks.get_all_records()
-            if not data: return pd.DataFrame()
-            df = pd.DataFrame(data)
-            df.columns = [str(c).strip().upper() for c in df.columns]
-            return df.astype(str)
-        except: return pd.DataFrame()
-
-    df_import_raw = fetch("Consolidado - Carcasas")
-
-    if not df_import_raw.empty and "RECUENTO" in df_import_raw.columns:
-        df_import_filtered = df_import_raw[df_import_raw["RECUENTO"].isin(["1", "1.0"])].copy()
-    else:
-        df_import_filtered = df_import_raw
-
-    return df_import_filtered, fetch("RECEPCION_IMPORTACIONES", "MOVIMIENTOS"), fetch("TIENDAS CARCASAS")
-
-
-# =========================================================
-# MÓDULO: DASH DESPACHOS
-# =========================================================
-
-ORDEN_MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
-               "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"]
-
-COLORES_TIENDAS = [
-    "#1a7a4a", "#2d9e6b", "#3dbb7e", "#5dcf96", "#85dcaa",
-    "#b5e878", "#cef250", "#e8d44d", "#f0c040", "#f5a623",
-    "#f7c948", "#a8d85a", "#72c472", "#4db88c", "#2eaa82",
-    "#6bcf85", "#d4e84a", "#f2d740", "#e8b830", "#c8e06a",
-]
-
-GREEN_MAIN  = "#2d9e6b"
-GREEN_DARK  = "#1a7a4a"
-GREEN_LIGHT = "#85dcaa"
-
-
-@st.cache_data(ttl=600)
-def cargar_despachos():
-    try:
-        sh = client.open("CONSOLIDADO_DESPACHOS")
-        wks = sh.sheet1
-        all_values = wks.get_all_values()
-        if not all_values or len(all_values) < 2:
-            return pd.DataFrame()
-
-        raw_headers = all_values[0]
-        rows = all_values[1:]
-
-        headers = []
-        seen = {}
-        for i, h in enumerate(raw_headers):
-            h_clean = str(h).strip()
-            if h_clean == "":
-                h_clean = f"_col_{i}"
-            key = h_clean.lower()
-            if key in seen:
-                seen[key] += 1
-                h_clean = f"{h_clean}_{seen[key]}"
-            else:
-                seen[key] = 0
-            headers.append(h_clean)
-
-        df = pd.DataFrame(rows, columns=headers)
-        df.columns = [c.strip().lower() for c in df.columns]
-        df = df[[c for c in df.columns if not c.startswith("_col_")]]
-        df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)].reset_index(drop=True)
-
-        df["unidades"] = pd.to_numeric(df.get("unidades", 0), errors="coerce").fillna(0).astype(int)
-
-        col_mes = next((c for c in df.columns if "mes" in c), None)
-        df["mes"] = df[col_mes].astype(str).str.strip().str.upper() if col_mes else "SIN MES"
-
-        col_sku = next((c for c in df.columns if "codigo_color_sin_punto" in c), None)
-        df["sku"] = df[col_sku].astype(str).str.strip() if col_sku else df.get("codigo_color", pd.Series([""] * len(df))).astype(str).str.strip()
-
-        col_desc = next((c for c in df.columns if "descripci" in c.lower()), None)
-        df["descripcion"] = df[col_desc].astype(str).str.strip() if col_desc else ""
-
-
-        df["codigo_departamento"] = df.get("codigo_departamento", pd.Series([""] * len(df))).astype(str).str.strip()
-
-        if "nombre_departamento" in df.columns:
-            df["nombre_tienda"] = df["nombre_departamento"].astype(str).str.replace(r"^\d+\.-\s*", "", regex=True).str.strip()
-            df["nombre_departamento_full"] = df["nombre_departamento"].astype(str).str.strip()
-        else:
-            df["nombre_tienda"] = df["codigo_departamento"]
-            df["nombre_departamento_full"] = df["codigo_departamento"]
-
-        # Filtrar solo tiendas aperturadas (ESTADO == "APERTURADAS") del sheet TIENDAS CARCASAS
-        try:
-            sh_t  = client.open("TIENDAS CARCASAS")
-            data_t = sh_t.sheet1.get_all_records()
-            if data_t:
-                df_t = pd.DataFrame(data_t)
-                df_t.columns = [str(c).strip().upper() for c in df_t.columns]
-                aperturadas = set(
-                    df_t[df_t["ESTADO"].astype(str).str.strip().str.upper() == "APERTURADAS"]
-                    ["TIENDA"].astype(str).str.strip().tolist()
-                )
-                if aperturadas:
-                    df = df[df["codigo_departamento"].isin(aperturadas)].reset_index(drop=True)
-        except Exception:
-            pass  # Si falla, muestra todo sin filtrar
-
-        return df
-    except Exception as e:
-        st.error(f"❌ Error cargando CONSOLIDADO_DESPACHOS: {e}")
-        return pd.DataFrame()
-
-
-def _ordenar_meses(df, col="mes"):
-    df = df.copy()
-    df["_orden_mes"] = df[col].map({m: i for i, m in enumerate(ORDEN_MESES)}).fillna(99)
-    return df.sort_values("_orden_mes").drop(columns=["_orden_mes"])
-
-
-def _render_metricas_despachos(df):
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("📦 Total unidades", f"{int(df['unidades'].sum()):,}")
-    c2.metric("🎨 SKUs únicos", f"{df['sku'].nunique():,}")
-    c3.metric("🏪 Tiendas activas", df["codigo_departamento"].nunique())
-    c4.metric("📅 Meses con data", df["mes"].nunique())
-
-
-def _render_top10(df, n=10):
-    st.markdown('<div class="titulo-seccion">🏆 Top SKUs despachados</div>', unsafe_allow_html=True)
-
-    col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1:
-        tiendas_opts = sorted(df["nombre_tienda"].unique().tolist())
-        sel_t = st.multiselect("Tienda(s)", options=["TODAS"] + tiendas_opts, default=["TODAS"], key="top10_tienda")
-    with col_f2:
-        meses_opts = sorted(df["mes"].unique(), key=lambda m: ORDEN_MESES.index(m) if m in ORDEN_MESES else 99)
-        sel_m = st.multiselect("Mes(es)", options=["TODOS"] + meses_opts, default=["TODOS"], key="top10_mes")
-    with col_f3:
-        n_top = st.selectbox("Mostrar top", options=[5, 10, 15, 20], index=1, key="top10_n")
-
-    df_f = df.copy()
-    df_f["sku"] = df_f["sku"].astype(str).str.strip()
-
-    if "TODAS" not in sel_t and sel_t:
-        df_f = df_f[df_f["nombre_tienda"].isin(sel_t)]
-    if "TODOS" not in sel_m and sel_m:
-        df_f = df_f[df_f["mes"].isin(sel_m)]
-
-    desc_map = df_f.groupby("sku")["descripcion"].first().to_dict()
-
-    top = (
-        df_f.groupby("sku")["unidades"]
-        .sum()
-        .nlargest(n_top)
-        .reset_index()
-        .sort_values("unidades", ascending=True)
-    )
-    top["descripcion"] = top["sku"].astype(str).map(desc_map).fillna("Sin descripción")
-    top["sku"] = "SKU-" + top["sku"].astype(str).str.strip()
-
-    n_bars = len(top)
-    colores_barra = [f"hsl({int(120 - (i / max(n_bars - 1, 1)) * 60)}, 68%, 42%)" for i in range(n_bars)]
-
-    fig = go.Figure(go.Bar(
-        x=top["unidades"],
-        y=top["sku"],
-        orientation="h",
-        marker=dict(color=colores_barra),
-        text=top["unidades"].apply(lambda v: f"{v:,}"),
-        textposition="outside",
-        textfont=dict(size=12, color="#2d3436"),
-        customdata=list(zip(top["descripcion"], top["sku"])),
-        hovertemplate=(
-            "<b>%{customdata[0]}</b><br>"
-            "🔑 SKU: %{customdata[1]}<br>"
-            "📦 Unidades: %{x:,}<extra></extra>"
-        ),
-    ))
-    fig.update_layout(
-        height=max(400, n_top * 48),
-        margin=dict(l=10, r=90, t=15, b=30),
-        xaxis=dict(showgrid=True, gridcolor="#e8f5ee", title="Unidades", tickfont=dict(size=11)),
-        yaxis=dict(showgrid=False, title="", tickfont=dict(size=12), automargin=True,
-                   type="category", categoryorder="array", categoryarray=top["sku"].tolist()),
-        plot_bgcolor="white", paper_bgcolor="white",
-        font=dict(family="Arial", size=12, color="#2d3436"), bargap=0.35,
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    with st.expander("📋 Ver tabla detalle"):
-        tabla = top.sort_values("unidades", ascending=False).reset_index(drop=True)
-        tabla.index += 1
-        tabla = tabla.rename(columns={"sku": "SKU", "unidades": "Unidades", "descripcion": "Descripción"})
-        tabla["Unidades"] = tabla["Unidades"].apply(lambda v: f"{v:,}")
-        st.dataframe(tabla[["SKU", "Descripción", "Unidades"]], use_container_width=True)
-
-
-def _render_evolutivo(df):
-    st.markdown('<div class="titulo-seccion">📈 Evolutivo de despachos por mes</div>', unsafe_allow_html=True)
-
-    col_t, col_m = st.columns([2, 2])
-    with col_t:
-        tiendas_disp = sorted(df["nombre_tienda"].unique().tolist())
-        sel_tiendas = st.multiselect("Tienda(s)", options=["TODAS"] + tiendas_disp, default=["TODAS"], key="evol_tiendas")
-    with col_m:
-        meses_disp = sorted(df["mes"].unique(), key=lambda m: ORDEN_MESES.index(m) if m in ORDEN_MESES else 99)
-        sel_meses = st.multiselect("Mes(es)", options=meses_disp, default=meses_disp, key="evol_meses")
-
-    if not sel_meses:
-        st.info("Selecciona al menos un mes.")
-        return
-
-    df_f = df.copy()
-    if "TODAS" not in sel_tiendas and sel_tiendas:
-        df_f = df_f[df_f["nombre_tienda"].isin(sel_tiendas)]
-    if sel_meses:
-        df_f = df_f[df_f["mes"].isin(sel_meses)]
-
-    modo_total = "TODAS" in sel_tiendas or not sel_tiendas
-    fig = go.Figure()
-
-    if modo_total:
-        pivot = _ordenar_meses(df_f.groupby("mes")["unidades"].sum().reset_index())
-        fig.add_trace(go.Scatter(
-            x=pivot["mes"], y=pivot["unidades"],
-            mode="lines+markers+text", name="TOTAL",
-            line=dict(color=GREEN_MAIN, width=3), marker=dict(size=10, color=GREEN_MAIN),
-            text=pivot["unidades"].apply(lambda v: f"{v:,}"), textposition="top center",
-            hovertemplate="<b>Total</b><br>Mes: %{x}<br>Unidades: %{y:,}<extra></extra>",
-            fill="tozeroy", fillcolor="rgba(45,158,107,0.12)",
-        ))
-    else:
-        pivot = _ordenar_meses(df_f.groupby(["mes", "nombre_tienda"])["unidades"].sum().reset_index())
-        for i, tienda in enumerate([t for t in sel_tiendas if t != "TODAS"]):
-            df_t = pivot[pivot["nombre_tienda"] == tienda]
-            if df_t.empty: continue
-            color = COLORES_TIENDAS[i % len(COLORES_TIENDAS)]
-            fig.add_trace(go.Scatter(
-                x=df_t["mes"], y=df_t["unidades"],
-                mode="lines+markers+text", name=tienda,
-                line=dict(color=color, width=2.5), marker=dict(size=8, color=color),
-                text=df_t["unidades"].apply(lambda v: f"{v:,}"), textposition="top center",
-                hovertemplate=f"<b>{tienda}</b><br>Mes: %{{x}}<br>Unidades: %{{y:,}}<extra></extra>",
-            ))
-
-    fig.update_layout(
-        height=420, margin=dict(l=10, r=20, t=20, b=80),
-        xaxis=dict(showgrid=False, title=""),
-        yaxis=dict(showgrid=True, gridcolor="#e8f5ee", title="Unidades"),
-        plot_bgcolor="white", paper_bgcolor="white",
-        font=dict(family="Arial", size=12, color="#2d3436"),
-        legend=dict(orientation="h", yanchor="bottom", y=-0.4, xanchor="left", x=0),
-        hovermode="x unified",
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    with st.expander("📋 Ver tabla pivoteada"):
-        if modo_total:
-            tabla = pivot.set_index("mes")[["unidades"]]
-            tabla.columns = ["Unidades"]
-            tabla["Unidades"] = tabla["Unidades"].apply(lambda v: f"{v:,}")
-            st.dataframe(tabla, use_container_width=True)
-        else:
-            tabla = pivot.pivot_table(index="nombre_tienda", columns="mes", values="unidades", aggfunc="sum", fill_value=0)
-            cols_ord = [m for m in ORDEN_MESES if m in tabla.columns]
-            tabla = tabla[cols_ord]
-            tabla["TOTAL"] = tabla.sum(axis=1)
-            tabla = tabla.sort_values("TOTAL", ascending=False)
-            st.dataframe(tabla.style.format("{:,}"), use_container_width=True)
-
-
-def _render_heatmap(df):
-    st.markdown('<div class="titulo-seccion">🗺️ Mapa de calor tienda × mes</div>', unsafe_allow_html=True)
-
-    pivot = df.groupby(["nombre_tienda", "mes"])["unidades"].sum().reset_index()
-    tabla = pivot.pivot_table(index="nombre_tienda", columns="mes", values="unidades", fill_value=0)
-    cols_ord = [m for m in ORDEN_MESES if m in tabla.columns]
-    tabla = tabla[cols_ord]
-    tabla["TOTAL"] = tabla.sum(axis=1)
-    tabla = tabla.sort_values("TOTAL", ascending=False).drop(columns=["TOTAL"])
-
-    fig = px.imshow(
-        tabla,
-        color_continuous_scale=[[0.0, "#f0faf4"], [0.25, "#85dcaa"], [0.5, "#3dbb7e"], [0.75, "#c8e06a"], [1.0, "#e8a020"]],
-        aspect="auto", text_auto=True, labels=dict(color="Unidades"),
-    )
-    fig.update_traces(texttemplate="%{z:,}", textfont_size=11)
-    fig.update_layout(
-        height=max(350, len(tabla) * 32 + 80),
-        margin=dict(l=10, r=10, t=20, b=40),
-        coloraxis_showscale=False,
-        xaxis=dict(side="top", tickfont=dict(size=11)),
-        yaxis=dict(tickfont=dict(size=11)),
-        plot_bgcolor="white", paper_bgcolor="white",
-        font=dict(family="Arial", size=11, color="#2d3436"),
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
 
 def render_dash_despachos():
     df = cargar_despachos()
@@ -531,56 +321,20 @@ def render_dash_despachos():
     if faltantes:
         st.error(f"❌ Columnas faltantes en el sheet: {', '.join(faltantes)}")
         return
-
-    # ── Configuración carrusel ──────────────────────────────────────────────
-    SEGUNDOS = st.sidebar.slider("⏱ Segundos por sección", 5, 60, 15, 5)
-
-    SECCIONES = [
-        ("📊 Métricas generales",  lambda: _render_metricas_despachos(df)),
-        ("🏆 Top SKUs",            lambda: _render_top10(df)),
-        ("📈 Evolutivo mensual",   lambda: _render_evolutivo(df)),
-        ("🗺️ Mapa de calor",      lambda: _render_heatmap(df)),
-    ]
-    N = len(SECCIONES)
-
-    # Índice de sección actual en session_state
-    if "carrusel_idx" not in st.session_state:
-        st.session_state["carrusel_idx"] = 0
-
-    # Barra de navegación manual
-    nav_cols = st.columns(N + 1)
-    for j, (nombre, _) in enumerate(SECCIONES):
-        if nav_cols[j].button(nombre, key=f"nav_{j}"):
-            st.session_state["carrusel_idx"] = j
-    pausa = nav_cols[N].checkbox("⏸ Pausar", value=False, key="carrusel_pausa")
-
-    st.markdown(
-        f'<div class="titulo-seccion">'
-        f'{SECCIONES[st.session_state["carrusel_idx"]][0]}'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
-
-    # Barra de progreso
-    progreso = st.progress(0)
-    contenido = st.empty()
-
-    # Renderizar sección actual
-    with contenido.container():
-        SECCIONES[st.session_state["carrusel_idx"]][1]()
-
-    # Loop de avance automático
-    if not pausa:
-        pasos = 40  # cuántos ticks por segundo de espera
-        for tick in range(pasos * SEGUNDOS):
-            time.sleep(1 / pasos)
-            progreso.progress((tick + 1) / (pasos * SEGUNDOS))
-
-        progreso.empty()
-        st.session_state["carrusel_idx"] = (st.session_state["carrusel_idx"] + 1) % N
-        st.rerun()
-    else:
-        progreso.empty()
+    st.markdown('<div class="titulo-seccion">📊 Dashboard de Despachos</div>', unsafe_allow_html=True)
+    _render_metricas_despachos(df)
+    st.divider()
+    fig_top  = _render_top10(df)
+    st.divider()
+    fig_evol = _render_evolutivo(df)
+    st.divider()
+    fig_hm   = _render_heatmap(df)
+    st.divider()
+    mostrar_seccion_ppt("📊 Dashboard de Despachos", [
+        ("🏆 Top SKUs despachados",       fig_top),
+        ("📈 Evolutivo mensual",          fig_evol),
+        ("🗺️ Mapa de calor tienda × mes", fig_hm),
+    ])
 
 
 # =========================================================
@@ -657,103 +411,74 @@ if menu == "📦 Importaciones":
     (tab_dash,) = st.tabs(["📊 Dash Importacion"])
 
     with tab_dash:
-
-        # ── Funciones de cada sección ───────────────────────────────────────
-        def _sec_aperturas():
-            st.markdown('<div class="titulo-seccion">🏪 Próximas Aperturas</div>', unsafe_allow_html=True)
-            if not df_tiendas.empty:
-                columnas_tiendas_req = ["ESTADO", "FCH ESTIMADA", "TIENDA", "DESCRIPCION"]
-                if all(col in df_tiendas.columns for col in columnas_tiendas_req):
-                    df_ap = df_tiendas[df_tiendas["ESTADO"].str.upper().str.contains("PENDIENTE", na=False)].copy()
-                    df_ap["FCH_DT"] = pd.to_datetime(df_ap["FCH ESTIMADA"], dayfirst=True, errors='coerce')
-                    df_filtrado = df_ap[df_ap["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
-                    cols = st.columns(4)
-                    for i, (_, row) in enumerate(df_filtrado.iterrows()):
-                        with cols[i % 4]:
-                            st.markdown(f'''<div class="apertura-card">
-                                <div class="tienda-titulo">🏪 {row["TIENDA"]}</div>
-                                <div class="desc-tienda">{row["DESCRIPCION"]}</div>
-                                <div class="fecha-est">📅 {row.get("FCH ESTIMADA","")}</div>
-                            </div>''', unsafe_allow_html=True)
-                else:
-                    st.warning("⚠️ Columnas faltantes en 'TIENDAS CARCASAS'")
-
-        def _sec_status():
-            st.markdown('<div class="titulo-seccion">📋 Status Global Importaciones</div>', unsafe_allow_html=True)
-            if not df_import.empty:
-                columnas_import_req = ["NOMBRE CORREO", "HORA FECH", "STATUS", "FCH LLEGADA"]
-                columnas_faltantes = [c for c in columnas_import_req if c not in df_import.columns]
-                if columnas_faltantes:
-                    st.error(f"❌ Columnas faltantes: {', '.join(columnas_faltantes)}")
-                else:
-                    m1, m2, m3 = st.columns(3)
-                    total     = df_import["NOMBRE CORREO"].nunique()
-                    arribados = df_import[df_import["STATUS"] == "ARRIBADO"]["NOMBRE CORREO"].nunique()
-                    m1.metric("Total Docs", total)
-                    m2.metric("Arribados", arribados)
-                    m3.metric("En Tránsito", total - arribados)
-                    st.divider()
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.write("### ⏳ Pendientes")
-                        df_pend = (
-                            df_import[df_import["STATUS"] != "ARRIBADO"]
-                            .groupby(["NOMBRE CORREO", "HORA FECH", "STATUS"])
-                            .size().reset_index(name="ASNs")
-                        )
-                        orden_status = {"ADUANAS": 0, "EN TRÁNSITO": 1, "EN TRANSITO": 1, "ORIGEN": 2}
-                        df_pend["_orden"] = df_pend["STATUS"].str.upper().str.strip().map(orden_status).fillna(
-                            df_pend["STATUS"].apply(lambda s: 99 if str(s).strip() == "" else 3)
-                        )
-                        df_pend = df_pend.sort_values("_orden").drop(columns=["_orden"])
-                        st.dataframe(df_pend, use_container_width=True, hide_index=True)
-                    with c2:
-                        st.write("### ✅ Arribados")
-                        df_arr = (
-                            df_import[df_import["STATUS"] == "ARRIBADO"]
-                            .groupby(["NOMBRE CORREO", "FCH LLEGADA"])
-                            .size().reset_index(name="ASNs")
-                        )
-                        df_arr["_fch_dt"] = pd.to_datetime(df_arr["FCH LLEGADA"], errors="coerce")
-                        df_arr = df_arr.sort_values("_fch_dt", ascending=False, na_position="last").drop(columns=["_fch_dt"])
-                        st.dataframe(df_arr, use_container_width=True, hide_index=True)
+        st.subheader("🏪 Próximas Aperturas de Tiendas - Perú")
+        if not df_tiendas.empty:
+            columnas_tiendas_req = ["ESTADO", "FCH ESTIMADA", "TIENDA", "DESCRIPCION"]
+            if all(col in df_tiendas.columns for col in columnas_tiendas_req):
+                df_ap = df_tiendas[df_tiendas["ESTADO"].str.upper().str.contains("PENDIENTE", na=False)].copy()
+                df_ap["FCH_DT"] = pd.to_datetime(df_ap["FCH ESTIMADA"], dayfirst=True, errors='coerce')
+                df_filtrado = df_ap[df_ap["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
+                cols = st.columns(4)
+                for i, (_, row) in enumerate(df_filtrado.iterrows()):
+                    with cols[i % 4]:
+                        st.markdown(f'''<div class="apertura-card">
+                            <div class="tienda-titulo">🏪 {row["TIENDA"]}</div>
+                            <div class="desc-tienda">{row["DESCRIPCION"]}</div>
+                            <div class="fecha-est">📅 {row.get("FCH ESTIMADA","")}</div>
+                        </div>''', unsafe_allow_html=True)
             else:
-                st.info("ℹ️ No hay registros con RECUENTO = 1, o la hoja está vacía.")
+                st.warning("⚠️ Columnas faltantes en 'TIENDAS CARCASAS'")
 
-        # ── Carrusel importaciones ──────────────────────────────────────────
-        SEGUNDOS_IMP = st.sidebar.slider("⏱ Segundos por sección", 5, 60, 15, 5, key="slider_imp")
+        st.markdown('<div class="titulo-seccion">STATUS GLOBAL</div>', unsafe_allow_html=True)
+        if not df_import.empty:
+            columnas_import_req = ["NOMBRE CORREO", "HORA FECH", "STATUS", "FCH LLEGADA"]
+            columnas_faltantes = [c for c in columnas_import_req if c not in df_import.columns]
 
-        SECCIONES_IMP = [
-            ("🏪 Próximas Aperturas",       _sec_aperturas),
-            ("📋 Status Importaciones",      _sec_status),
-        ]
-        N_IMP = len(SECCIONES_IMP)
+            if columnas_faltantes:
+                st.error(f"❌ Columnas faltantes: {', '.join(columnas_faltantes)}")
+            else:
+                m1, m2, m3 = st.columns(3)
+                total     = df_import["NOMBRE CORREO"].nunique()
+                arribados = df_import[df_import["STATUS"] == "ARRIBADO"]["NOMBRE CORREO"].nunique()
+                m1.metric("Total Docs", total)
+                m2.metric("Arribados", arribados)
+                m3.metric("En Tránsito", total - arribados)
 
-        if "carrusel_imp_idx" not in st.session_state:
-            st.session_state["carrusel_imp_idx"] = 0
+                st.divider()
+                c1, c2 = st.columns(2)
 
-        nav_cols = st.columns(N_IMP + 1)
-        for j, (nombre, _) in enumerate(SECCIONES_IMP):
-            if nav_cols[j].button(nombre, key=f"nav_imp_{j}"):
-                st.session_state["carrusel_imp_idx"] = j
-        pausa_imp = nav_cols[N_IMP].checkbox("⏸ Pausar", value=False, key="pausa_imp")
+                with c1:
+                    st.write("### ⏳ Pendientes")
+                    df_pend = (
+                        df_import[df_import["STATUS"] != "ARRIBADO"]
+                        .groupby(["NOMBRE CORREO", "HORA FECH", "STATUS"])
+                        .size()
+                        .reset_index(name="ASNs")
+                    )
+                    orden_status = {"ADUANAS": 0, "EN TRÁNSITO": 1, "EN TRANSITO": 1, "ORIGEN": 2}
+                    df_pend["_orden"] = df_pend["STATUS"].str.upper().str.strip().map(orden_status).fillna(
+                        df_pend["STATUS"].apply(lambda s: 99 if str(s).strip() == "" else 3)
+                    )
+                    df_pend = df_pend.sort_values("_orden").drop(columns=["_orden"])
+                    st.dataframe(df_pend, use_container_width=True, hide_index=True)
 
-        progreso_imp = st.progress(0)
-        contenido_imp = st.empty()
-
-        with contenido_imp.container():
-            SECCIONES_IMP[st.session_state["carrusel_imp_idx"]][1]()
-
-        if not pausa_imp:
-            pasos = 40
-            for tick in range(pasos * SEGUNDOS_IMP):
-                time.sleep(1 / pasos)
-                progreso_imp.progress((tick + 1) / (pasos * SEGUNDOS_IMP))
-            progreso_imp.empty()
-            st.session_state["carrusel_imp_idx"] = (st.session_state["carrusel_imp_idx"] + 1) % N_IMP
-            st.rerun()
+                with c2:
+                    st.write("### ✅ Arribados")
+                    df_arr = (
+                        df_import[df_import["STATUS"] == "ARRIBADO"]
+                        .groupby(["NOMBRE CORREO", "FCH LLEGADA"])
+                        .size()
+                        .reset_index(name="ASNs")
+                    )
+                    df_arr["_fch_dt"] = pd.to_datetime(df_arr["FCH LLEGADA"], errors="coerce")
+                    df_arr = df_arr.sort_values("_fch_dt", ascending=False, na_position="last").drop(columns=["_fch_dt"])
+                    st.dataframe(df_arr, use_container_width=True, hide_index=True)
         else:
-            progreso_imp.empty()
+            st.info("ℹ️ No hay registros con RECUENTO = 1, o la hoja está vacía.")
+
+    # tab_recep oculto (modo pantalla)
+
+    # tab_ops oculto (modo pantalla)
 
 # MENÚ DISTRIBUCIÓN oculto (modo pantalla)
 
