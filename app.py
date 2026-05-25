@@ -358,12 +358,13 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
     logo_der_tag = f'<img src="{logo_der}" style="max-height:56px;max-width:180px;object-fit:contain;">' if logo_der else ""
 
     slides_js_parts = []
+    import json as _json
     for t, f in slides:
         if isinstance(f, str):
-            slides_js_parts.append(f'{{"titulo":{repr(t)},"tipo":"html","content":{repr(f)}}}')
+            slides_js_parts.append('{"titulo":' + _json.dumps(t) + ',"tipo":"html","content":' + _json.dumps(f) + '}')
         else:
             fig_json = pio.to_json(f)
-            slides_js_parts.append(f'{{"titulo":{repr(t)},"tipo":"plotly","fig":{fig_json}}}')
+            slides_js_parts.append('{"titulo":' + _json.dumps(t) + ',"tipo":"plotly","fig":' + fig_json + '}')
     slides_js = "[" + ",".join(slides_js_parts) + "]"
 
     html_completo = f"""<!DOCTYPE html>
