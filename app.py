@@ -352,7 +352,8 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
         return
 
     logo_izq, logo_der = _logos_b64()
-    sid = "s" + str(abs(hash(titulo_seccion)) % 100000)
+    import re as _re2
+    sid = "s" + _re2.sub(r'[^a-zA-Z0-9]', '_', titulo_seccion)[:20]
     logo_izq_tag = f'<img src="{logo_izq}" style="max-height:56px;max-width:180px;object-fit:contain;">' if logo_izq else ""
     logo_der_tag = f'<img src="{logo_der}" style="max-height:56px;max-width:180px;object-fit:contain;">' if logo_der else ""
 
@@ -582,7 +583,9 @@ document.addEventListener('keydown',function(e){{
 </body>
 </html>"""
 
-    key = f"ppt_show_{abs(hash(titulo_seccion)) % 100000}"
+    # Key estable: limpiar título a solo alfanumérico
+    import re as _re
+    key = "ppt_" + _re.sub(r'[^a-zA-Z0-9]', '_', titulo_seccion)[:30]
     if key not in st.session_state:
         st.session_state[key] = False
 
