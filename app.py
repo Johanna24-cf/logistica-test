@@ -478,15 +478,22 @@ function goTo(i) {{
     var isHeatmap = SLIDES[i].fig.data && SLIDES[i].fig.data[0] && SLIDES[i].fig.data[0].type==='heatmap';
     var mg = isHeatmap
       ? {{l:160, r:20, t:50, b:20}}
-      : {{l:75,  r:40, t:50, b:70}};
-    // Para scatter: quitar text labels, solo hover
+      : {{l:20,  r:20, t:60, b:60}};
+    // Para scatter: mantener labels sobre puntos, quitar eje Y
     var figData = SLIDES[i].fig.data.map(function(trace) {{
       if (!isHeatmap && trace.type !== 'heatmap') {{
         var t = Object.assign({{}}, trace);
-        t.mode = (t.mode||'').replace('+text','').replace('text+','').replace('text','');
-        if (!t.mode) t.mode = 'lines+markers';
-        t.text = [];
-        t.textposition = 'none';
+        // Asegurar mode con text
+        if (t.mode && t.mode.indexOf('text') === -1) t.mode = t.mode + '+text';
+        if (!t.mode) t.mode = 'lines+markers+text';
+        // Formatear labels con separador de miles
+        if (t.y && t.y.length) {{
+          t.text = t.y.map(function(v) {{
+            return typeof v === 'number' ? v.toLocaleString('es-PE') : (v||'');
+          }});
+        }}
+        t.textposition = 'top center';
+        t.textfont = {{size: 13, color: '#1a7a4a', family: 'Arial'}};
         return t;
       }}
       return trace;
@@ -496,8 +503,12 @@ function goTo(i) {{
       paper_bgcolor:'#ffffff', plot_bgcolor:'#ffffff',
       margin: mg,
       font:{{family:'Arial',size:13}},
-      yaxis: isHeatmap ? Object.assign({{}}, base.yaxis||{{}}, {{title:'', tickfont:{{size:11.5}}}}) : (base.yaxis||{{}}),
-      xaxis: isHeatmap ? Object.assign({{}}, base.xaxis||{{}}, {{title:'', tickfont:{{size:12}}, side:'top'}}) : (base.xaxis||{{}})
+      yaxis: isHeatmap
+        ? Object.assign({{}}, base.yaxis||{{}}, {{title:'', tickfont:{{size:11.5}}}})
+        : Object.assign({{}}, base.yaxis||{{}}, {{visible:false, showticklabels:false, showgrid:false, zeroline:false}}),
+      xaxis: isHeatmap
+        ? Object.assign({{}}, base.xaxis||{{}}, {{title:'', tickfont:{{size:13}}, side:'top'}})
+        : Object.assign({{}}, base.xaxis||{{}}, {{tickfont:{{size:14}}, showgrid:false}})
     }});
     Plotly.react('plt-div', isHeatmap ? SLIDES[i].fig.data : figData, lay, {{displayModeBar:false,responsive:false}});
   }} else {{
@@ -908,14 +919,15 @@ if menu == "📦 Importaciones":
         # ── SLIDE 1: Próximas Aperturas ────────────────────────────────────
         def _card_ap(tienda, desc, fecha):
             return (
-                '<div style="background:#fff;border-radius:14px;border-top:5px solid #2d9e6b;'
-                'padding:20px 22px;box-shadow:0 3px 12px rgba(45,158,107,0.13);display:flex;flex-direction:column;justify-content:space-between;">'
+                '<div style="background:#fff;border-radius:16px;border-top:6px solid #2d9e6b;'
+                'padding:28px 30px;box-shadow:0 4px 16px rgba(45,158,107,0.13);'
+                'display:flex;flex-direction:column;justify-content:space-between;">'
                 '<div>'
-                '<div style="color:#1a7a4a;font-size:1.15rem;font-weight:800;margin-bottom:6px;">🏪 ' + tienda + '</div>'
-                '<div style="color:#636e72;font-size:.88em;line-height:1.4;">' + desc + '</div>'
+                '<div style="color:#1a7a4a;font-size:1.5rem;font-weight:800;margin-bottom:10px;line-height:1.2;">🏪 ' + tienda + '</div>'
+                '<div style="color:#636e72;font-size:1.05em;line-height:1.5;">' + desc + '</div>'
                 '</div>'
-                '<div style="color:#e8a020;font-weight:700;font-size:.92em;margin-top:14px;padding-top:10px;'
-                'border-top:1px solid #f0faf4;">📅 ' + fecha + '</div>'
+                '<div style="color:#e8a020;font-weight:700;font-size:1.1em;margin-top:20px;'
+                'padding-top:14px;border-top:2px solid #f0faf4;">📅 ' + fecha + '</div>'
                 '</div>'
             )
 
@@ -926,10 +938,10 @@ if menu == "📦 Importaciones":
             df_ap2 = df_ap2[df_ap2["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(6)
             cards = "".join(_card_ap(str(r["TIENDA"]), str(r["DESCRIPCION"]), str(r.get("FCH ESTIMADA",""))) for _, r in df_ap2.iterrows())
             apertura_slide = (
-                '<div style="width:100%;height:100%;padding:24px 28px;background:#f0faf4;'
-                'font-family:Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;gap:16px;">'
+                '<div style="width:100%;height:100vh;padding:20px 28px;background:#f0faf4;'
+                'font-family:Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;gap:14px;">'
                 '<div style="font-size:11px;font-weight:700;color:#2d9e6b;text-transform:uppercase;letter-spacing:1.2px;">🏪 Próximas Aperturas de Tiendas</div>'
-                '<div style="display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:14px;flex:1;">'
+                '<div style="display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);gap:16px;flex:1;min-height:0;">'
                 + cards +
                 '</div></div>'
             )
@@ -958,13 +970,13 @@ if menu == "📦 Importaciones":
                 df = df.head(mx)
                 heads = "".join(
                     '<th style="padding:7px 10px;background:#2d9e6b;color:#fff;font-size:12px;'
-                    'font-weight:700;text-align:left;position:sticky;top:0;z-index:1;">' + str(c) + '</th>'
+                    'font-weight:700;text-align:left;position:sticky;top:0;z-index:1;font-size:13px;">' + str(c) + '</th>'
                     for c in df.columns
                 )
                 rows = "".join(
                     '<tr>' +
                     "".join(
-                        '<td style="padding:6px 10px;border-bottom:1px solid #f0faf4;font-size:12px;color:#2d3436;">' + str(v) + '</td>'
+                        '<td style="padding:8px 12px;border-bottom:1px solid #f0faf4;font-size:13px;color:#2d3436;">' + str(v) + '</td>'
                         for v in r
                     ) + '</tr>' for r in df.values
                 )
@@ -994,8 +1006,8 @@ if menu == "📦 Importaciones":
                 return (
                     '<div style="background:#fff;border-radius:14px;border-left:5px solid ' + color + ';'
                     'padding:18px 20px;box-shadow:0 2px 8px rgba(45,158,107,.1);display:flex;flex-direction:column;justify-content:center;">'
-                    '<div style="color:#aaa;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;">' + label + '</div>'
-                    '<div style="color:#1a7a4a;font-size:2.4rem;font-weight:900;line-height:1.05;">' + str(val) + '</div>'
+                    '<div style="color:#aaa;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;">' + label + '</div>'
+                    '<div style="color:#1a7a4a;font-size:3rem;font-weight:900;line-height:1.05;">' + str(val) + '</div>'
                     + (f'<div style="color:#aaa;font-size:11px;margin-top:4px;">{sub}</div>' if sub else '') +
                     '</div>'
                 )
@@ -1016,7 +1028,7 @@ if menu == "📦 Importaciones":
                     '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
                     'box-shadow:0 2px 8px rgba(45,158,107,.08);display:flex;flex-direction:column;min-height:0;height:100%;">'
                     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
-                    '<span style="font-size:13px;font-weight:700;color:#1a7a4a;">' + title + '</span>'
+                    '<span style="font-size:15px;font-weight:700;color:#1a7a4a;">' + title + '</span>'
                     '<span style="background:' + badge_color + ';color:#fff;border-radius:20px;'
                     'padding:2px 10px;font-size:11px;font-weight:700;">' + badge_text + '</span></div>'
                     '<div style="overflow-y:auto;flex:1;">' + tbl_html + '</div>'
