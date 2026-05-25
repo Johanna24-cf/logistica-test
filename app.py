@@ -477,17 +477,32 @@ function goTo(i) {{
     // Detectar si es heatmap (imshow tiene 'heatmap' en el tipo)
     var isHeatmap = SLIDES[i].fig.data && SLIDES[i].fig.data[0] && SLIDES[i].fig.data[0].type==='heatmap';
     var mg = isHeatmap
-      ? {{l:160, r:20, t:50, b:20}}   // heatmap: eje Y largo a la izq
-      : {{l:65,  r:65, t:30, b:70}};  // resto: margen simétrico p/no cortar eje X
+      ? {{l:160, r:20,  t:50, b:20}}
+      : {{l:70,  r:100, t:40, b:70}};  // r:100 para que labels de MAYO no se corten
+    // Para scatter/line: quitar textposition en primer y último punto, usar solo hover
+    var figData = SLIDES[i].fig.data.map(function(trace) {{
+      if (!isHeatmap && trace.mode && trace.mode.indexOf('text') !== -1) {{
+        // Ocultar label solo del primer y último punto manteniéndolos en el resto
+        var newTrace = Object.assign({{}}, trace);
+        if (trace.text && trace.text.length > 0) {{
+          var txt = trace.text.slice();
+          txt[0] = '';
+          txt[txt.length - 1] = '';
+          newTrace.text = txt;
+        }}
+        return newTrace;
+      }}
+      return trace;
+    }});
     var lay=Object.assign({{}},base,{{
       autosize:false, width:W, height:H,
       paper_bgcolor:'#ffffff', plot_bgcolor:'#ffffff',
       margin: mg,
       font:{{family:'Arial',size:13}},
       yaxis: isHeatmap ? Object.assign({{}}, base.yaxis||{{}}, {{title:'', tickfont:{{size:11.5}}}}) : (base.yaxis||{{}}),
-      xaxis: isHeatmap ? Object.assign({{}}, base.xaxis||{{}}, {{title:'', tickfont:{{size:12}},  side:'top'}}) : (base.xaxis||{{}})
+      xaxis: isHeatmap ? Object.assign({{}}, base.xaxis||{{}}, {{title:'', tickfont:{{size:12}}, side:'top'}}) : (base.xaxis||{{}})
     }});
-    Plotly.react('plt-div',SLIDES[i].fig.data,lay,{{displayModeBar:false,responsive:false}});
+    Plotly.react('plt-div', isHeatmap ? SLIDES[i].fig.data : figData, lay, {{displayModeBar:false,responsive:false}});
   }} else {{
     plt.style.display='none'; htm.style.display='block';
     htm.innerHTML=SLIDES[i].content;
@@ -893,70 +908,37 @@ if menu == "📦 Importaciones":
         st.divider()
 
         # Slide 1: tarjetas aperturas
-        # Slide única combinada: aperturas + métricas + tablas
+        # ── SLIDE 1: Próximas Aperturas ────────────────────────────────────
         def _card_ap(tienda, desc, fecha):
             return (
-                '<div style="background:#fff;border-radius:12px;'
-                'border-top:4px solid #2d9e6b;padding:12px 14px;'
-                'box-shadow:0 2px 8px rgba(45,158,107,0.12);">'
-                '<div style="color:#1a7a4a;font-size:.95rem;font-weight:700;">🏪 ' + tienda + '</div>'
-                '<div style="color:#636e72;font-size:.8em;margin-top:3px;">' + desc + '</div>'
-                '<div style="color:#e8a020;font-weight:700;font-size:.82em;margin-top:8px;">📅 ' + fecha + '</div>'
+                '<div style="background:#fff;border-radius:14px;border-top:5px solid #2d9e6b;'
+                'padding:20px 22px;box-shadow:0 3px 12px rgba(45,158,107,0.13);display:flex;flex-direction:column;justify-content:space-between;">'
+                '<div>'
+                '<div style="color:#1a7a4a;font-size:1.15rem;font-weight:800;margin-bottom:6px;">🏪 ' + tienda + '</div>'
+                '<div style="color:#636e72;font-size:.88em;line-height:1.4;">' + desc + '</div>'
+                '</div>'
+                '<div style="color:#e8a020;font-weight:700;font-size:.92em;margin-top:14px;padding-top:10px;'
+                'border-top:1px solid #f0faf4;">📅 ' + fecha + '</div>'
                 '</div>'
             )
 
-        def _metric_card(val, label, color, extra=""):
-            return (
-                '<div style="flex:1;background:#fff;border-left:4px solid ' + color + ';'
-                'border-radius:10px;padding:10px 14px;box-shadow:0 2px 6px rgba(45,158,107,.08);">'
-                '<div style="color:#aaa;font-size:10px;font-weight:700;text-transform:uppercase;'
-                'letter-spacing:.5px;">' + label + '</div>'
-                '<div style="color:#1a7a4a;font-size:1.7rem;font-weight:800;line-height:1.1;">' + str(val) + '</div>'
-                + extra +
-                '</div>'
-            )
-
-        def _tbl(df, mx=25):
-            # Quitar filas donde todos los valores relevantes están vacíos
-            df = df[df.apply(lambda row: any(
-                str(v).strip() not in ('', '-', 'nan', 'None') for v in row
-            ), axis=1)].head(mx)
-            heads = "".join(
-                '<th style="padding:5px 8px;background:#2d9e6b;color:#fff;font-size:11px;'
-                'font-weight:700;text-align:left;position:sticky;top:0;">' + str(c) + '</th>'
-                for c in df.columns
-            )
-            rows = "".join(
-                "<tr>" + "".join(
-                    '<td style="padding:4px 8px;border-bottom:1px solid #f0faf4;'
-                    'font-size:11px;color:#2d3436;">' + str(v) + '</td>'
-                    for v in r
-                ) + "</tr>" for r in df.values
-            )
-            return '<table style="width:100%;border-collapse:collapse;"><thead><tr>' + heads + '</tr></thead><tbody>' + rows + '</tbody></table>'
-
-        def _panel(title, badge_bg, badge_text, tbl_html):
-            return (
-                '<div style="flex:1;background:#fff;border-radius:12px;padding:10px 12px;'
-                'box-shadow:0 2px 6px rgba(45,158,107,.08);display:flex;flex-direction:column;min-height:0;">'
-                '<div style="font-size:11.5px;font-weight:700;color:#1a7a4a;margin-bottom:6px;'
-                'display:flex;align-items:center;gap:6px;">' + title +
-                '<span style="background:' + badge_bg + ';color:#fff;border-radius:20px;'
-                'padding:1px 8px;font-size:10px;">' + badge_text + '</span></div>'
-                '<div style="overflow-y:auto;flex:1;">' + tbl_html + '</div>'
-                '</div>'
-            )
-
-        cards_html = ""
+        apertura_slide = ""
         if not df_tiendas.empty and all(c in df_tiendas.columns for c in ["ESTADO","FCH ESTIMADA","TIENDA","DESCRIPCION"]):
             df_ap2 = df_tiendas[df_tiendas["ESTADO"].str.upper().str.contains("PENDIENTE", na=False)].copy()
             df_ap2["FCH_DT"] = pd.to_datetime(df_ap2["FCH ESTIMADA"], dayfirst=True, errors="coerce")
-            df_ap2 = df_ap2[df_ap2["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
-            for _, row in df_ap2.iterrows():
-                cards_html += _card_ap(str(row["TIENDA"]), str(row["DESCRIPCION"]), str(row.get("FCH ESTIMADA","")))
+            df_ap2 = df_ap2[df_ap2["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(6)
+            cards = "".join(_card_ap(str(r["TIENDA"]), str(r["DESCRIPCION"]), str(r.get("FCH ESTIMADA",""))) for _, r in df_ap2.iterrows())
+            apertura_slide = (
+                '<div style="width:100%;height:100%;padding:24px 28px;background:#f0faf4;'
+                'font-family:Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;gap:16px;">'
+                '<div style="font-size:11px;font-weight:700;color:#2d9e6b;text-transform:uppercase;letter-spacing:1.2px;">🏪 Próximas Aperturas de Tiendas</div>'
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:14px;flex:1;">'
+                + cards +
+                '</div></div>'
+            )
 
-        metricas_html = ""
-        status_tables = ""
+        # ── SLIDE 2: Status Global — dashboard visual tipo Power BI ─────────
+        status_slide = ""
         if not df_import.empty and all(c in df_import.columns for c in ["NOMBRE CORREO","STATUS","HORA FECH","FCH LLEGADA"]):
             total_i = df_import["NOMBRE CORREO"].nunique()
             arr_i   = df_import[df_import["STATUS"]=="ARRIBADO"]["NOMBRE CORREO"].nunique()
@@ -968,49 +950,102 @@ if menu == "📦 Importaciones":
             df_pend2["_o"] = df_pend2["STATUS"].str.upper().str.strip().map(orden_s).fillna(
                 df_pend2["STATUS"].apply(lambda s: 99 if str(s).strip()=="" else 3))
             df_pend2 = df_pend2.sort_values("_o").drop(columns=["_o"])
+            df_pend2 = df_pend2[df_pend2.apply(lambda row: any(str(v).strip() not in ('','nan','None') for v in row), axis=1)]
 
             df_arr2 = df_import[df_import["STATUS"]=="ARRIBADO"].groupby(["NOMBRE CORREO","FCH LLEGADA"]).size().reset_index(name="ASNs")
             df_arr2["_f"] = pd.to_datetime(df_arr2["FCH LLEGADA"], errors="coerce")
             df_arr2 = df_arr2.sort_values("_f", ascending=False, na_position="last").drop(columns=["_f"])
+            df_arr2 = df_arr2[df_arr2.apply(lambda row: any(str(v).strip() not in ('','nan','None') for v in row), axis=1)]
 
-            pct_bar = (
-                '<div style="height:5px;background:#e8f5ee;border-radius:3px;margin-top:4px;">'
-                '<div style="height:5px;background:linear-gradient(90deg,#2d9e6b,#c8e06a);'
-                'border-radius:3px;width:' + str(pct) + '%;"></div></div>'
+            def _tbl(df, mx=20):
+                df = df.head(mx)
+                heads = "".join(
+                    '<th style="padding:7px 10px;background:#2d9e6b;color:#fff;font-size:12px;'
+                    'font-weight:700;text-align:left;position:sticky;top:0;z-index:1;">' + str(c) + '</th>'
+                    for c in df.columns
+                )
+                rows = "".join(
+                    '<tr>' +
+                    "".join(
+                        '<td style="padding:6px 10px;border-bottom:1px solid #f0faf4;font-size:12px;color:#2d3436;">' + str(v) + '</td>'
+                        for v in r
+                    ) + '</tr>' for r in df.values
+                )
+                return ('<table style="width:100%;border-collapse:collapse;">'
+                        '<thead><tr>' + heads + '</tr></thead>'
+                        '<tbody>' + rows + '</tbody></table>')
+
+            # Barra circular SVG para % completado
+            r_svg, cx, cy = 54, 60, 60
+            circ = 2 * 3.14159 * r_svg
+            dash = circ * pct / 100
+            svg_donut = (
+                f'<svg width="120" height="120" viewBox="0 0 120 120">'
+                f'<circle cx="{cx}" cy="{cy}" r="{r_svg}" fill="none" stroke="#e8f5ee" stroke-width="14"/>'
+                f'<circle cx="{cx}" cy="{cy}" r="{r_svg}" fill="none" stroke="url(#g)" stroke-width="14"'
+                f' stroke-dasharray="{dash:.1f} {circ:.1f}" stroke-linecap="round"'
+                f' transform="rotate(-90 {cx} {cy})"/>'
+                f'<defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="0%">'
+                f'<stop offset="0%" style="stop-color:#2d9e6b"/>'
+                f'<stop offset="100%" style="stop-color:#c8e06a"/>'
+                f'</linearGradient></defs>'
+                f'<text x="{cx}" y="{cy+6}" text-anchor="middle" font-size="20" font-weight="800" fill="#1a7a4a">{pct}%</text>'
+                f'</svg>'
             )
 
-            metricas_html = (
-                _metric_card(total_i, "Total Docs", "#2d9e6b") +
-                _metric_card(arr_i,   "Arribados",  "#3dbb7e") +
-                _metric_card(trans_i, "En Tránsito","#c8e06a") +
-                _metric_card(str(pct) + "%", "% Completado", "#e8d44d", pct_bar)
+            def _kpi(val, label, color, sub=""):
+                return (
+                    '<div style="background:#fff;border-radius:14px;border-left:5px solid ' + color + ';'
+                    'padding:18px 20px;box-shadow:0 2px 8px rgba(45,158,107,.1);display:flex;flex-direction:column;justify-content:center;">'
+                    '<div style="color:#aaa;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;">' + label + '</div>'
+                    '<div style="color:#1a7a4a;font-size:2.4rem;font-weight:900;line-height:1.05;">' + str(val) + '</div>'
+                    + (f'<div style="color:#aaa;font-size:11px;margin-top:4px;">{sub}</div>' if sub else '') +
+                    '</div>'
+                )
+
+            kpis = (
+                _kpi(total_i, "Total Docs", "#2d9e6b") +
+                _kpi(arr_i, "Arribados", "#3dbb7e", f"{pct}% del total") +
+                _kpi(trans_i, "En Tránsito", "#e8d44d") +
+                '<div style="background:#fff;border-radius:14px;border-left:5px solid #c8e06a;'
+                'padding:18px 20px;box-shadow:0 2px 8px rgba(45,158,107,.1);display:flex;align-items:center;gap:12px;">'
+                + svg_donut +
+                '<div><div style="color:#aaa;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;">Completado</div>'
+                '<div style="color:#1a7a4a;font-size:1rem;font-weight:700;margin-top:4px;">' + str(arr_i) + ' de ' + str(total_i) + ' docs</div></div></div>'
             )
-            status_tables = (
-                _panel("⏳ Pendientes", "#e8a020", str(len(df_pend2)) + " docs", _tbl(df_pend2)) +
-                _panel("✅ Arribados",  "#2d9e6b", str(len(df_arr2)) + " docs",  _tbl(df_arr2))
+
+            def _panel(title, badge_color, badge_text, tbl_html):
+                return (
+                    '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
+                    'box-shadow:0 2px 8px rgba(45,158,107,.08);display:flex;flex-direction:column;min-height:0;">'
+                    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
+                    '<span style="font-size:13px;font-weight:700;color:#1a7a4a;">' + title + '</span>'
+                    '<span style="background:' + badge_color + ';color:#fff;border-radius:20px;'
+                    'padding:2px 10px;font-size:11px;font-weight:700;">' + badge_text + '</span></div>'
+                    '<div style="overflow-y:auto;flex:1;">' + tbl_html + '</div>'
+                    '</div>'
+                )
+
+            status_slide = (
+                '<div style="width:100%;height:100%;padding:18px 24px;background:#f0faf4;'
+                'font-family:Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;">'
+                # KPIs
+                '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;flex-shrink:0;">' + kpis + '</div>'
+                # Tablas
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1;min-height:0;">'
+                + _panel("⏳ Pendientes", "#e8a020", str(len(df_pend2)) + " docs", _tbl(df_pend2))
+                + _panel("✅ Arribados",  "#2d9e6b", str(len(df_arr2)) + " docs",  _tbl(df_arr2))
+                + '</div></div>'
             )
 
-        sep = '<div style="height:1px;background:linear-gradient(90deg,#2d9e6b,#c8e06a,#2d9e6b);flex-shrink:0;"></div>'
+        slides_imp = []
+        if apertura_slide:
+            slides_imp.append(("🏪 Próximas Aperturas", apertura_slide))
+        if status_slide:
+            slides_imp.append(("📋 Status Global Importaciones", status_slide))
 
-        combined_html = (
-            '<div style="width:100%;height:100%;display:flex;flex-direction:column;gap:9px;'
-            'padding:12px 16px;background:#f0faf4;font-family:Arial,sans-serif;box-sizing:border-box;">' +
-            (
-                '<div style="flex-shrink:0;">'
-                '<div style="font-size:10px;font-weight:700;color:#2d9e6b;text-transform:uppercase;'
-                'letter-spacing:1px;margin-bottom:7px;">🏪 Próximas Aperturas</div>'
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;">' + cards_html + '</div>'
-                '</div>' + sep
-                if cards_html else ""
-            ) +
-            ('<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;flex-shrink:0;">' + metricas_html + '</div>'
-             if metricas_html else "") +
-            ('<div style="display:flex;gap:9px;flex:1;min-height:0;">' + status_tables + '</div>'
-             if status_tables else "") +
-            '</div>'
-        )
-
-        mostrar_seccion_ppt("📦 Importaciones", [("📦 Estado de Importaciones", combined_html)])
+        if slides_imp:
+            mostrar_seccion_ppt("📦 Importaciones", slides_imp)
 
     # tab_recep oculto (modo pantalla)
 
