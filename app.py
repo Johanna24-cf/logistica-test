@@ -477,20 +477,17 @@ function goTo(i) {{
     // Detectar si es heatmap (imshow tiene 'heatmap' en el tipo)
     var isHeatmap = SLIDES[i].fig.data && SLIDES[i].fig.data[0] && SLIDES[i].fig.data[0].type==='heatmap';
     var mg = isHeatmap
-      ? {{l:160, r:20,  t:50, b:20}}
-      : {{l:70,  r:140, t:50, b:70}};  // r:140 amplio para label MAYO
-    // Para scatter/line: quitar textposition en primer y último punto, usar solo hover
+      ? {{l:160, r:20, t:50, b:20}}
+      : {{l:75,  r:40, t:50, b:70}};
+    // Para scatter: quitar text labels, solo hover
     var figData = SLIDES[i].fig.data.map(function(trace) {{
-      if (!isHeatmap && trace.mode && trace.mode.indexOf('text') !== -1) {{
-        // Ocultar label solo del primer y último punto manteniéndolos en el resto
-        var newTrace = Object.assign({{}}, trace);
-        if (trace.text && trace.text.length > 0) {{
-          var txt = trace.text.slice();
-          txt[0] = '';
-          txt[txt.length - 1] = '';
-          newTrace.text = txt;
-        }}
-        return newTrace;
+      if (!isHeatmap && trace.type !== 'heatmap') {{
+        var t = Object.assign({{}}, trace);
+        t.mode = (t.mode||'').replace('+text','').replace('text+','').replace('text','');
+        if (!t.mode) t.mode = 'lines+markers';
+        t.text = [];
+        t.textposition = 'none';
+        return t;
       }}
       return trace;
     }});
