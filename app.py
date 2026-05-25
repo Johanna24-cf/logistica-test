@@ -357,8 +357,13 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
     # Serializar figs como JSON (sin plotlyjs inline, se carga desde CDN)
     slides_data = []
     for t, f in slides:
-        html = f.to_html(include_plotlyjs=False, full_html=False,
-                         config={"displayModeBar": False})
+        # Forzar dimensiones explícitas para que el HTML sea autónomo
+        f.update_layout(width=1400, height=700, autosize=False)
+        html = f.to_html(
+            include_plotlyjs="cdn",   # incluir Plotly dentro del HTML
+            full_html=True,           # HTML completo y autónomo
+            config={"displayModeBar": False, "responsive": True},
+        )
         slides_data.append({"titulo": t, "html": html})
     slides_json = json.dumps(slides_data, ensure_ascii=False)
 
@@ -367,8 +372,6 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
 
     # Inyectar el overlay + JS siempre (oculto por defecto)
     st.markdown(f"""
-<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
-
 <div id="{sid}-ov" style="display:none;position:fixed;inset:0;z-index:99999;
   background:#ffffff;flex-direction:column;align-items:center;
   justify-content:flex-start;padding:24px 40px 20px;box-sizing:border-box;
@@ -407,7 +410,14 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
   function goTo(i) {{
     idx = i;
     document.getElementById('{sid}-titulo').textContent = SLIDES[i].titulo;
-    document.getElementById('{sid}-body').innerHTML = SLIDES[i].html;
+    var body = document.getElementById('{sid}-body');
+    body.innerHTML = '';
+    var iframe = document.createElement('iframe');
+    iframe.style.cssText = 'width:100%;height:100%;border:none;border-radius:8px;background:#ffffff;';
+    body.appendChild(iframe);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(SLIDES[i].html);
+    iframe.contentDocument.close();
     document.getElementById('{sid}-dots').querySelectorAll('span').forEach(function(d,j){{
       d.style.background = j===i ? '#2d9e6b' : '#c8e06a';
     }});
