@@ -341,117 +341,185 @@ def _logos_b64():
 
 
 
+
 def mostrar_seccion_ppt(titulo_seccion, slides):
+    """
+    Genera un HTML completo con todas las slides y lo embebe
+    con st.components — funciona dentro del sandbox de Streamlit.
+    slides = [(titulo, fig_o_html_string), ...]
+    """
     import plotly.io as pio
+    import streamlit.components.v1 as components
 
     slides = [(t, f) for t, f in slides if f is not None]
     if not slides:
         return
 
     logo_izq, logo_der = _logos_b64()
-    sid = "ppt_" + str(abs(hash(titulo_seccion)) % 100000)
-    logo_izq_tag = f'<img src="{logo_izq}" style="height:54px;object-fit:contain;">' if logo_izq else "<div></div>"
-    logo_der_tag = f'<img src="{logo_der}" style="height:54px;object-fit:contain;">' if logo_der else "<div></div>"
+    logo_izq_tag = f'<img src="{logo_izq}" style="height:54px;object-fit:contain;">' if logo_izq else ""
+    logo_der_tag = f'<img src="{logo_der}" style="height:54px;object-fit:contain;">' if logo_der else ""
 
+    # Serializar cada fig como JSON de Plotly
     slides_js_parts = []
     for t, f in slides:
-        fig_json = pio.to_json(f)
-        slides_js_parts.append(f'{{"titulo":{repr(t)},"fig":{fig_json}}}')
+        if isinstance(f, str):
+            # Ya es HTML (para tarjetas/tablas)
+            slides_js_parts.append(f'{{"titulo":{repr(t)},"tipo":"html","content":{repr(f)}}}')
+        else:
+            fig_json = pio.to_json(f)
+            slides_js_parts.append(f'{{"titulo":{repr(t)},"tipo":"plotly","fig":{fig_json}}}')
     slides_js = "[" + ",".join(slides_js_parts) + "]"
 
-    # TODO: overlay + boton en UN SOLO bloque HTML para compartir el mismo iframe
-    html = f"""
+    html_completo = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
-
-<!-- OVERLAY -->
-<div id="{sid}-ov" style="display:none;position:fixed;inset:0;z-index:2147483647;
-  background:#fff;flex-direction:column;align-items:center;
-  justify-content:flex-start;padding:20px 40px 16px;box-sizing:border-box;
-  font-family:Arial,sans-serif;">
-
-  <button onclick="document.getElementById('{sid}-ov').style.display='none';"
-    style="position:absolute;top:12px;right:18px;background:transparent;
-           border:2px solid #2d9e6b;color:#2d9e6b;border-radius:8px;
-           padding:4px 14px;font-size:13px;font-weight:700;cursor:pointer;">
-    ✖ Cerrar
-  </button>
-
-  <div style="width:100%;display:flex;align-items:center;
-              justify-content:space-between;margin-bottom:8px;">
-    <div style="min-width:140px;">{logo_izq_tag}</div>
-    <div id="{sid}-tit" style="color:#1a7a4a;font-size:1.5rem;font-weight:700;
-         text-align:center;flex:1;padding:0 12px;"></div>
-    <div style="min-width:140px;text-align:right;">{logo_der_tag}</div>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ background: #fff; font-family: Arial, sans-serif; overflow: hidden; }}
+  #slide-wrap {{
+    width: 100vw; height: 100vh; display: flex; flex-direction: column;
+    padding: 20px 40px 16px; background: #fff;
+  }}
+  #hdr {{
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }}
+  #hdr .logo {{ min-width: 140px; }}
+  #hdr .logo-r {{ min-width: 140px; text-align: right; }}
+  #titulo {{
+    color: #1a7a4a; font-size: 1.5rem; font-weight: 700;
+    text-align: center; flex: 1; padding: 0 12px;
+  }}
+  #progbar-wrap {{
+    width: 100%; height: 5px; background: #e8f5ee;
+    border-radius: 3px; margin-bottom: 10px;
+  }}
+  #progbar {{
+    height: 5px; background: #2d9e6b; border-radius: 3px; width: 0%;
+  }}
+  #body {{ flex: 1; min-height: 0; width: 100%; overflow: auto; }}
+  #plt   {{ width: 100%; height: 100%; }}
+  #html-content {{ width: 100%; height: 100%; overflow: auto; padding: 10px; }}
+  #footer {{
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 10px;
+  }}
+  #dots {{ display: flex; gap: 10px; }}
+  #dots span {{
+    width: 11px; height: 11px; border-radius: 50%;
+    display: inline-block; cursor: pointer; background: #c8e06a;
+  }}
+  #nav {{ display: flex; gap: 8px; }}
+  #nav button {{
+    background: transparent; border: 2px solid #2d9e6b; color: #2d9e6b;
+    border-radius: 6px; padding: 4px 12px; font-size: 13px;
+    font-weight: 700; cursor: pointer;
+  }}
+  #nav button:hover {{ background: #2d9e6b; color: #fff; }}
+  #counter {{ color: #636e72; font-size: 13px; }}
+</style>
+</head>
+<body>
+<div id="slide-wrap">
+  <div id="hdr">
+    <div class="logo">{logo_izq_tag}</div>
+    <div id="titulo"></div>
+    <div class="logo-r">{logo_der_tag}</div>
   </div>
-
-  <div style="width:100%;height:5px;background:#e8f5ee;border-radius:3px;margin-bottom:8px;">
-    <div id="{sid}-prg" style="height:5px;background:#2d9e6b;border-radius:3px;width:0%;"></div>
+  <div id="progbar-wrap"><div id="progbar"></div></div>
+  <div id="body">
+    <div id="plt"></div>
+    <div id="html-content" style="display:none;"></div>
   </div>
-
-  <div id="{sid}-bdy" style="width:100%;flex:1;min-height:0;">
-    <div id="{sid}-plt" style="width:100%;height:100%;"></div>
+  <div id="footer">
+    <div id="dots"></div>
+    <div id="counter"></div>
+    <div id="nav">
+      <button onclick="prev()">&#8592; Ant</button>
+      <button onclick="next()">Sig &#8594;</button>
+    </div>
   </div>
-
-  <div id="{sid}-dts" style="margin-top:8px;display:flex;gap:10px;"></div>
-</div>
-
-<!-- BOTON -->
-<div style="margin-top:10px;">
-  <button id="{sid}-btn"
-    style="background:linear-gradient(135deg,#2d9e6b,#c8e06a);color:#0d1f16;
-           border:none;border-radius:8px;padding:10px 26px;font-size:14px;
-           font-weight:700;cursor:pointer;">
-    &#128250; Ver en presentaci&#243;n
-  </button>
 </div>
 
 <script>
-(function(){{
-  var SLIDES={slides_js}, N=SLIDES.length, idx=0, tmr=null, ptmr=null, DL=5000;
+var SLIDES = {slides_js};
+var N = SLIDES.length, idx = 0, tmr = null, ptmr = null, DL = 5000;
 
-  function goTo(i){{
-    idx=i;
-    document.getElementById('{sid}-tit').textContent=SLIDES[i].titulo;
-    var lay=Object.assign({{}},SLIDES[i].fig.layout,{{autosize:true,width:undefined,height:undefined,paper_bgcolor:'#fff',plot_bgcolor:'#fff'}});
-    Plotly.react('{sid}-plt', SLIDES[i].fig.data, lay, {{responsive:true,displayModeBar:false}});
-    document.getElementById('{sid}-dts').querySelectorAll('span').forEach(function(d,j){{
-      d.style.background=j===i?'#2d9e6b':'#c8e06a';
-    }});
-    clearInterval(ptmr);
-    var prg=document.getElementById('{sid}-prg'), t0=Date.now();
-    prg.style.width='0%';
-    ptmr=setInterval(function(){{prg.style.width=Math.min(100,(Date.now()-t0)/DL*100)+'%';}},50);
-  }}
-
-  function next(){{goTo((idx+1)%N);}}
-
-  function abrir(){{
-    var ov=document.getElementById('{sid}-ov');
-    ov.style.display='flex';
-    var dts=document.getElementById('{sid}-dts');
-    dts.innerHTML='';
-    SLIDES.forEach(function(_,j){{
-      var d=document.createElement('span');
-      d.style.cssText='width:11px;height:11px;border-radius:50%;display:inline-block;cursor:pointer;background:#c8e06a;';
-      d.onclick=function(){{clearInterval(tmr);goTo(j);tmr=setInterval(next,DL);}};
-      dts.appendChild(d);
-    }});
-    goTo(0);
-    tmr=setInterval(next,DL);
-    if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
-  }}
-
-  document.getElementById('{sid}-btn').addEventListener('click', abrir);
-
-  document.addEventListener('keydown',function(e){{
-    if(e.key==='Escape'){{clearInterval(tmr);clearInterval(ptmr);document.getElementById('{sid}-ov').style.display='none';if(document.exitFullscreen)document.exitFullscreen();}}
-    if(e.key==='ArrowRight'){{clearInterval(tmr);next();tmr=setInterval(next,DL);}}
-    if(e.key==='ArrowLeft'){{clearInterval(tmr);goTo((idx-1+N)%N);tmr=setInterval(next,DL);}}
+function buildDots() {{
+  var dts = document.getElementById('dots');
+  dts.innerHTML = '';
+  SLIDES.forEach(function(_, j) {{
+    var d = document.createElement('span');
+    d.id = 'dot-' + j;
+    d.onclick = function() {{ clearInterval(tmr); goTo(j); tmr = setInterval(next, DL); }};
+    dts.appendChild(d);
   }});
-}})();
+}}
+
+function goTo(i) {{
+  idx = i;
+  document.getElementById('titulo').textContent = SLIDES[i].titulo;
+  document.getElementById('counter').textContent = (i+1) + ' / ' + N;
+
+  // Dots
+  document.querySelectorAll('#dots span').forEach(function(d, j) {{
+    d.style.background = j === i ? '#2d9e6b' : '#c8e06a';
+  }});
+
+  // Contenido
+  var plt = document.getElementById('plt');
+  var htmlDiv = document.getElementById('html-content');
+
+  if (SLIDES[i].tipo === 'plotly') {{
+    plt.style.display = 'block';
+    htmlDiv.style.display = 'none';
+    var lay = Object.assign({{}}, SLIDES[i].fig.layout, {{
+      autosize: true, width: undefined, height: undefined,
+      paper_bgcolor: '#fff', plot_bgcolor: '#fff'
+    }});
+    Plotly.react('plt', SLIDES[i].fig.data, lay, {{responsive: true, displayModeBar: false}});
+  }} else {{
+    plt.style.display = 'none';
+    htmlDiv.style.display = 'block';
+    htmlDiv.innerHTML = SLIDES[i].content;
+  }}
+
+  // Barra progreso
+  clearInterval(ptmr);
+  var prg = document.getElementById('progbar'), t0 = Date.now();
+  prg.style.width = '0%';
+  ptmr = setInterval(function() {{
+    prg.style.width = Math.min(100, (Date.now()-t0)/DL*100) + '%';
+  }}, 50);
+}}
+
+function next() {{ goTo((idx+1) % N); }}
+function prev() {{ goTo((idx-1+N) % N); }}
+
+document.addEventListener('keydown', function(e) {{
+  if (e.key === 'ArrowRight') {{ clearInterval(tmr); next(); tmr = setInterval(next, DL); }}
+  if (e.key === 'ArrowLeft')  {{ clearInterval(tmr); prev(); tmr = setInterval(next, DL); }}
+}});
+
+buildDots();
+goTo(0);
+tmr = setInterval(next, DL);
 </script>
-"""
-    st.markdown(html, unsafe_allow_html=True)
+</body>
+</html>"""
+
+    # Mostrar botón que expande el componente
+    key = f"ppt_show_{abs(hash(titulo_seccion)) % 100000}"
+    if key not in st.session_state:
+        st.session_state[key] = False
+
+    if st.button(f"🖥️ Ver presentación: {titulo_seccion}", key=f"btn_{key}"):
+        st.session_state[key] = not st.session_state[key]
+
+    if st.session_state[key]:
+        components.html(html_completo, height=700, scrolling=False)
 
 
 def _render_top10(df, n=10):
@@ -760,6 +828,74 @@ if menu == "📦 Importaciones":
                     st.dataframe(df_arr, use_container_width=True, hide_index=True)
         else:
             st.info("ℹ️ No hay registros con RECUENTO = 1, o la hoja está vacía.")
+
+        # ── Botón presentación importaciones ───────────────────────────────
+        st.divider()
+
+        # Slide 1: tarjetas aperturas
+        apertura_html = ""
+        if not df_tiendas.empty and all(c in df_tiendas.columns for c in ["ESTADO","FCH ESTIMADA","TIENDA","DESCRIPCION"]):
+            df_ap2 = df_tiendas[df_tiendas["ESTADO"].str.upper().str.contains("PENDIENTE", na=False)].copy()
+            df_ap2["FCH_DT"] = pd.to_datetime(df_ap2["FCH ESTIMADA"], dayfirst=True, errors="coerce")
+            df_ap2 = df_ap2[df_ap2["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
+            cards = ""
+            for _, row in df_ap2.iterrows():
+                cards += f"""<div style="background:linear-gradient(135deg,#fff,#f0faf4);
+                    padding:20px;border-radius:12px;border-left:6px solid #2d9e6b;
+                    box-shadow:0 4px 12px rgba(45,158,107,0.15);min-width:200px;flex:1;">
+                    <div style="color:#1a7a4a;font-size:1.1em;font-weight:700;">🏪 {row["TIENDA"]}</div>
+                    <div style="color:#636e72;font-size:0.85em;">{row["DESCRIPCION"]}</div>
+                    <div style="color:#e8a020;font-weight:bold;font-size:0.9em;margin-top:10px;">
+                        📅 {row.get("FCH ESTIMADA","")}</div>
+                </div>"""
+            apertura_html = f'<div style="display:flex;gap:16px;flex-wrap:wrap;padding:20px;">{cards}</div>'
+
+        # Slide 2: tabla status
+        status_html = ""
+        if not df_import.empty and all(c in df_import.columns for c in ["NOMBRE CORREO","STATUS","HORA FECH","FCH LLEGADA"]):
+            total_i = df_import["NOMBRE CORREO"].nunique()
+            arr_i   = df_import[df_import["STATUS"]=="ARRIBADO"]["NOMBRE CORREO"].nunique()
+            trans_i = total_i - arr_i
+
+            df_pend2 = df_import[df_import["STATUS"]!="ARRIBADO"].groupby(["NOMBRE CORREO","HORA FECH","STATUS"]).size().reset_index(name="ASNs")
+            orden_s = {"ADUANAS":0,"EN TRÁNSITO":1,"EN TRANSITO":1,"ORIGEN":2}
+            df_pend2["_o"] = df_pend2["STATUS"].str.upper().str.strip().map(orden_s).fillna(df_pend2["STATUS"].apply(lambda s: 99 if str(s).strip()=="" else 3))
+            df_pend2 = df_pend2.sort_values("_o").drop(columns=["_o"])
+
+            df_arr2 = df_import[df_import["STATUS"]=="ARRIBADO"].groupby(["NOMBRE CORREO","FCH LLEGADA"]).size().reset_index(name="ASNs")
+            df_arr2["_f"] = pd.to_datetime(df_arr2["FCH LLEGADA"], errors="coerce")
+            df_arr2 = df_arr2.sort_values("_f", ascending=False, na_position="last").drop(columns=["_f"])
+
+            def df_to_html_table(df):
+                rows = "".join(f"<tr>{''.join(f'<td style=padding:6px_8px;border-bottom:1px_solid_#e8f5ee;font-size:13px>{v}</td>' for v in r)}</tr>" for r in df.values)
+                heads = "".join(f"<th style='padding:8px;background:#2d9e6b;color:#fff;font-size:13px;'>{c}</th>" for c in df.columns)
+                return f"<table style='width:100%;border-collapse:collapse;'><thead><tr>{heads}</tr></thead><tbody>{rows}</tbody></table>"
+
+            status_html = f"""<div style='padding:20px;'>
+              <div style='display:flex;gap:24px;margin-bottom:20px;'>
+                <div style='background:linear-gradient(135deg,#f0faf4,#e8f5ee);border-left:4px solid #2d9e6b;border-radius:10px;padding:16px 24px;'>
+                  <div style='color:#1a7a4a;font-weight:600;font-size:13px;'>Total Docs</div>
+                  <div style='color:#1a7a4a;font-size:2rem;font-weight:700;'>{total_i}</div></div>
+                <div style='background:linear-gradient(135deg,#f0faf4,#e8f5ee);border-left:4px solid #2d9e6b;border-radius:10px;padding:16px 24px;'>
+                  <div style='color:#1a7a4a;font-weight:600;font-size:13px;'>Arribados</div>
+                  <div style='color:#1a7a4a;font-size:2rem;font-weight:700;'>{arr_i}</div></div>
+                <div style='background:linear-gradient(135deg,#f0faf4,#e8f5ee);border-left:4px solid #2d9e6b;border-radius:10px;padding:16px 24px;'>
+                  <div style='color:#1a7a4a;font-weight:600;font-size:13px;'>En Tránsito</div>
+                  <div style='color:#1a7a4a;font-size:2rem;font-weight:700;'>{trans_i}</div></div>
+              </div>
+              <div style='display:flex;gap:24px;'>
+                <div style='flex:1;'><h3 style='color:#1a7a4a;margin-bottom:8px;'>⏳ Pendientes</h3>{df_to_html_table(df_pend2)}</div>
+                <div style='flex:1;'><h3 style='color:#1a7a4a;margin-bottom:8px;'>✅ Arribados</h3>{df_to_html_table(df_arr2)}</div>
+              </div></div>"""
+
+        slides_imp = []
+        if apertura_html:
+            slides_imp.append(("🏪 Próximas Aperturas", apertura_html))
+        if status_html:
+            slides_imp.append(("📋 Status Global Importaciones", status_html))
+
+        if slides_imp:
+            mostrar_seccion_ppt("📦 Importaciones", slides_imp)
 
     # tab_recep oculto (modo pantalla)
 
