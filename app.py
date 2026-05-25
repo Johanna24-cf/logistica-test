@@ -598,7 +598,7 @@ if menu == "📦 Importaciones":
                 c1, c2 = st.columns(2)
 
                 with c1:
-                    st.write("### ⏳ Pendientes")
+                    st.write("### ⏳ Pendientes de arribo")
                     df_pend = (
                         df_import[df_import["STATUS"] != "ARRIBADO"]
                         .groupby(["NOMBRE CORREO", "HORA FECH", "STATUS"])
