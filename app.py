@@ -478,7 +478,7 @@ function goTo(i) {{
     var isHeatmap = SLIDES[i].fig.data && SLIDES[i].fig.data[0] && SLIDES[i].fig.data[0].type==='heatmap';
     var mg = isHeatmap
       ? {{l:160, r:20,  t:50, b:20}}
-      : {{l:70,  r:100, t:40, b:70}};  // r:100 para que labels de MAYO no se corten
+      : {{l:70,  r:140, t:50, b:70}};  // r:140 amplio para label MAYO
     // Para scatter/line: quitar textposition en primer y último punto, usar solo hover
     var figData = SLIDES[i].fig.data.map(function(trace) {{
       if (!isHeatmap && trace.mode && trace.mode.indexOf('text') !== -1) {{
@@ -1017,7 +1017,7 @@ if menu == "📦 Importaciones":
             def _panel(title, badge_color, badge_text, tbl_html):
                 return (
                     '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
-                    'box-shadow:0 2px 8px rgba(45,158,107,.08);display:flex;flex-direction:column;min-height:0;">'
+                    'box-shadow:0 2px 8px rgba(45,158,107,.08);display:flex;flex-direction:column;min-height:0;height:100%;">'
                     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
                     '<span style="font-size:13px;font-weight:700;color:#1a7a4a;">' + title + '</span>'
                     '<span style="background:' + badge_color + ';color:#fff;border-radius:20px;'
@@ -1027,12 +1027,12 @@ if menu == "📦 Importaciones":
                 )
 
             status_slide = (
-                '<div style="width:100%;height:100%;padding:18px 24px;background:#f0faf4;'
+                '<div style="width:100%;height:100vh;padding:18px 24px;background:#f0faf4;'
                 'font-family:Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;">'
                 # KPIs
                 '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;flex-shrink:0;">' + kpis + '</div>'
                 # Tablas
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1;min-height:0;">'
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1;min-height:0;height:100%;">'
                 + _panel("⏳ Pendientes", "#e8a020", str(len(df_pend2)) + " docs", _tbl(df_pend2))
                 + _panel("✅ Arribados",  "#2d9e6b", str(len(df_arr2)) + " docs",  _tbl(df_arr2))
                 + '</div></div>'
