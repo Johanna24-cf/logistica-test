@@ -438,6 +438,11 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
     <div id="nav">
       <button onclick="manualPrev()">&#8592; Ant</button>
       <button onclick="manualNext()">Sig &#8594;</button>
+      <button onclick="toggleFS()" id="fs-btn"
+        style="background:linear-gradient(135deg,#2d9e6b,#c8e06a);
+               color:#0d1f16;border:none;">
+        &#x26F6; Pantalla completa
+      </button>
     </div>
   </div>
 </div>
@@ -505,10 +510,52 @@ function manualPrev(){{ clearInterval(tmr); prev(); tmr=setInterval(next,DL); }}
   }});
 }})();
 
+// Fullscreen: intentar en el iframe, si falla pedirlo al padre
+function toggleFS() {{
+  var el = document.documentElement;
+  var isFS = document.fullscreenElement || document.webkitFullscreenElement;
+  if (isFS) {{
+    (document.exitFullscreen || document.webkitExitFullscreen || function(){{}}).call(document);
+    document.getElementById('fs-btn').textContent = '\u26F6 Pantalla completa';
+  }} else {{
+    // Intentar fullscreen en el iframe directamente
+    if (el.requestFullscreen) {{
+      el.requestFullscreen().then(function(){{
+        document.getElementById('fs-btn').textContent = '\u29C9 Salir fullscreen';
+        // Redibuja gráficos con nuevo tamaño
+        setTimeout(function(){{ goTo(idx); }}, 300);
+      }}).catch(function(){{
+        // Si el iframe no tiene permiso, pedirlo al documento padre
+        window.parent.postMessage({{type:'requestFullscreen'}}, '*');
+      }});
+    }} else {{
+      window.parent.postMessage({{type:'requestFullscreen'}}, '*');
+    }}
+  }}
+}}
+
+// Escuchar respuesta del padre (cuando fullscreen se activa en el padre)
+window.addEventListener('message', function(e){{
+  if(e.data && e.data.type === 'fullscreenGranted') {{
+    document.getElementById('fs-btn').textContent = '\u29C9 Salir fullscreen';
+    setTimeout(function(){{ goTo(idx); }}, 300);
+  }}
+}});
+
+// Al cambiar tamaño (por fullscreen), redibujar
+window.addEventListener('resize', function(){{
+  clearTimeout(window._resizeTmr);
+  window._resizeTmr = setTimeout(function(){{ goTo(idx); }}, 200);
+}});
+
 // Teclado
 document.addEventListener('keydown',function(e){{
   if(e.key==='ArrowRight') manualNext();
   if(e.key==='ArrowLeft')  manualPrev();
+  if(e.key==='F11' || e.key==='f') toggleFS();
+  if(e.key==='Escape') {{
+    document.getElementById('fs-btn').textContent = '\u26F6 Pantalla completa';
+  }}
 }});
 
 // Arrancar
@@ -538,6 +585,23 @@ window.addEventListener('message', function(e){{
         # Altura = ventana completa menos el header de Streamlit (~80px)
         # scrolling=False + CSS height:100vh dentro del iframe hace fullscreen real
         components.html(html_completo, height=860, scrolling=False)
+        # JS en la página padre para conceder fullscreen al iframe cuando lo pida
+        st.markdown("""
+<script>
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'requestFullscreen') {
+    // Buscar el iframe del componente (el último añadido)
+    var iframes = document.querySelectorAll('iframe');
+    var target = iframes[iframes.length - 1];
+    if (target) {
+      target.setAttribute('allowfullscreen', '');
+      (target.requestFullscreen || target.webkitRequestFullscreen ||
+       function(){}).call(target);
+    }
+  }
+});
+</script>
+""", unsafe_allow_html=True)
 
 
 def _render_top10(df, n=10):
