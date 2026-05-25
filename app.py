@@ -338,26 +338,34 @@ def _logos_b64():
     return _b64("CARCASAS.png"), _b64("CARGOFLEX.png")
 
 
+
 def mostrar_seccion_ppt(titulo_seccion, slides):
     """
-    Un solo botón que abre overlay con carrusel cada 5 seg.
-    slides = [(titulo_slide, fig), ...]
+    Botón real de Streamlit que abre overlay HTML con carrusel cada 5 seg.
+    slides = [(titulo_slide, fig), ...]  — ignora Nones
     """
     import json
+
+    # Filtrar slides inválidos
+    slides = [(t, f) for t, f in slides if f is not None]
+    if not slides:
+        return
+
     logo_izq, logo_der = _logos_b64()
     sid = "ppt_" + str(abs(hash(titulo_seccion)) % 100000)
 
+    # Serializar figs como JSON (sin plotlyjs inline, se carga desde CDN)
     slides_data = []
     for t, f in slides:
         html = f.to_html(include_plotlyjs=False, full_html=False,
                          config={"displayModeBar": False})
         slides_data.append({"titulo": t, "html": html})
-
     slides_json = json.dumps(slides_data, ensure_ascii=False)
 
     logo_izq_tag = f'<img src="{logo_izq}" style="height:56px;object-fit:contain;">' if logo_izq else ""
     logo_der_tag = f'<img src="{logo_der}" style="height:56px;object-fit:contain;">' if logo_der else ""
 
+    # Inyectar el overlay + JS siempre (oculto por defecto)
     st.markdown(f"""
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 
@@ -366,7 +374,7 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
   justify-content:flex-start;padding:24px 40px 20px;box-sizing:border-box;
   font-family:Arial,sans-serif;">
 
-  <button onclick="pptCerrar_{sid}()"
+  <button onclick="window['{sid}_cerrar']()"
     style="position:absolute;top:14px;right:20px;background:transparent;
            border:2px solid #2d9e6b;color:#2d9e6b;border-radius:8px;
            padding:5px 14px;font-size:13px;font-weight:700;cursor:pointer;">
@@ -382,8 +390,8 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
   </div>
 
   <div style="width:100%;height:5px;background:#e8f5ee;border-radius:3px;margin-bottom:10px;">
-    <div id="{sid}-prog" style="height:5px;background:#2d9e6b;border-radius:3px;
-         width:0%;transition:width 0.08s linear;"></div>
+    <div id="{sid}-prog" style="height:5px;background:#2d9e6b;border-radius:3px;width:0%;
+         transition:width 0.08s linear;"></div>
   </div>
 
   <div id="{sid}-body" style="width:100%;flex:1;min-height:0;overflow:hidden;"></div>
@@ -394,8 +402,7 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
 <script>
 (function(){{
   var SLIDES = {slides_json};
-  var N = SLIDES.length;
-  var idx = 0, timer = null, progTimer = null, DELAY = 5000;
+  var N = SLIDES.length, idx = 0, timer = null, progTimer = null, DELAY = 5000;
 
   function goTo(i) {{
     idx = i;
@@ -405,25 +412,23 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
       d.style.background = j===i ? '#2d9e6b' : '#c8e06a';
     }});
     clearInterval(progTimer);
-    var prog = document.getElementById('{sid}-prog');
+    var prog = document.getElementById('{sid}-prog'), start = Date.now();
     prog.style.width = '0%';
-    var start = Date.now();
     progTimer = setInterval(function(){{
-      var p = Math.min(100, (Date.now()-start)/DELAY*100);
-      prog.style.width = p + '%';
+      prog.style.width = Math.min(100,(Date.now()-start)/DELAY*100)+'%';
     }}, 50);
   }}
 
   function next(){{ goTo((idx+1)%N); }}
 
-  window['pptAbrir_{sid}'] = function(){{
+  window['{sid}_abrir'] = function(){{
     var ov = document.getElementById('{sid}-ov');
     ov.style.display = 'flex';
     var dotsEl = document.getElementById('{sid}-dots');
     dotsEl.innerHTML = '';
     SLIDES.forEach(function(_,j){{
       var d = document.createElement('span');
-      d.style.cssText = 'width:11px;height:11px;border-radius:50%;display:inline-block;cursor:pointer;';
+      d.style.cssText = 'width:11px;height:11px;border-radius:50%;display:inline-block;cursor:pointer;background:#c8e06a;';
       d.onclick = function(){{ clearInterval(timer); goTo(j); timer=setInterval(next,DELAY); }};
       dotsEl.appendChild(d);
     }});
@@ -432,28 +437,27 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
     if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
   }};
 
-  window['pptCerrar_{sid}'] = function(){{
+  window['{sid}_cerrar'] = function(){{
     clearInterval(timer); clearInterval(progTimer);
     document.getElementById('{sid}-ov').style.display='none';
     if(document.exitFullscreen) document.exitFullscreen();
   }};
 
   document.addEventListener('keydown', function(e){{
-    var fn = window['pptCerrar_{sid}'];
-    if(e.key==='Escape' && fn) fn();
+    if(e.key==='Escape') window['{sid}_cerrar'] && window['{sid}_cerrar']();
     if(e.key==='ArrowRight'){{ clearInterval(timer); next(); timer=setInterval(next,DELAY); }}
     if(e.key==='ArrowLeft'){{ clearInterval(timer); goTo((idx-1+N)%N); timer=setInterval(next,DELAY); }}
   }});
 }})();
 </script>
-
-<button onclick="window['pptAbrir_{sid}']()"
-  style="background:linear-gradient(135deg,#2d9e6b,#c8e06a);
-         color:#0d1f16;border:none;border-radius:8px;
-         padding:9px 24px;font-size:14px;font-weight:700;cursor:pointer;">
-  &#128250; Ver en presentaci&#243;n
-</button>
 """, unsafe_allow_html=True)
+
+    # st.button real — al hacer clic dispara el JS del overlay via componente html
+    col_btn, _ = st.columns([1, 4])
+    with col_btn:
+        if st.button("🖥️ Ver en presentación", key=f"btn_{sid}", use_container_width=True):
+            st.markdown(f"<script>window['{sid}_abrir']();</script>", unsafe_allow_html=True)
+
 
 def _render_top10(df, n=10):
     st.markdown('<div class="titulo-seccion">🏆 Top SKUs despachados</div>', unsafe_allow_html=True)
