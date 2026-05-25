@@ -371,80 +371,117 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 <style>
   * {{ box-sizing:border-box; margin:0; padding:0; }}
-  html, body {{
-    width:100%; height:100%;
-    background:#fff; font-family:Arial,sans-serif; overflow:hidden;
-  }}
+  html, body {{ width:100%; height:100%; background:#f8fdf9; font-family:Arial,sans-serif; overflow:hidden; }}
+
   #wrap {{
     width:100%; height:100vh;
     display:flex; flex-direction:column;
-    padding:18px 36px 12px; background:#fff;
+    background:#f8fdf9;
   }}
+
+  /* ── HEADER ── */
   #hdr {{
-    display:flex; align-items:center;
-    justify-content:space-between; margin-bottom:8px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:space-between;
+    background:#fff;
+    border-bottom:3px solid #2d9e6b;
+    padding:10px 32px;
+    flex-shrink:0;
+    min-height:78px;
+  }}
+  .logo-box {{
+    width:200px; display:flex; align-items:center;
+  }}
+  .logo-box.right {{ justify-content:flex-end; }}
+  .logo-box img {{
+    max-height:58px; max-width:190px;
+    object-fit:contain; display:block;
   }}
   #titulo {{
-    color:#1a7a4a; font-size:1.6rem; font-weight:700;
-    text-align:center; flex:1; padding:0 12px;
+    color:#1a7a4a; font-size:1.75rem; font-weight:800;
+    text-align:center; flex:1; padding:0 16px;
+    letter-spacing:-0.3px; line-height:1.2;
   }}
+
+  /* ── BARRA PROGRESO ── */
   #progbar-wrap {{
-    width:100%; height:5px; background:#e8f5ee;
-    border-radius:3px; margin-bottom:8px; flex-shrink:0;
+    width:100%; height:4px; background:#e0f2e9; flex-shrink:0;
   }}
-  #progbar {{ height:5px; background:#2d9e6b; border-radius:3px; width:0%; }}
+  #progbar {{
+    height:4px; background:linear-gradient(90deg,#2d9e6b,#c8e06a);
+    border-radius:0; width:0%; transition:width 0.05s linear;
+  }}
+
+  /* ── CUERPO ── */
   #body {{
-    flex:1; min-height:0; width:100%; position:relative; overflow:hidden;
+    flex:1; min-height:0; width:100%;
+    padding:16px 32px 8px; overflow:hidden;
+    display:flex; align-items:stretch;
   }}
   #plt {{ width:100%; height:100%; }}
   #html-content {{
     width:100%; height:100%; overflow:auto; display:none;
   }}
+
+  /* ── FOOTER ── */
   #footer {{
     display:flex; align-items:center; justify-content:space-between;
-    margin-top:8px; flex-shrink:0;
+    background:#fff; border-top:1px solid #e0f2e9;
+    padding:8px 32px; flex-shrink:0; min-height:48px;
   }}
-  #dots {{ display:flex; gap:10px; }}
+  #dots {{ display:flex; gap:10px; align-items:center; }}
   #dots span {{
-    width:12px; height:12px; border-radius:50%;
-    display:inline-block; cursor:pointer; background:#c8e06a;
-    transition:background 0.3s;
+    width:10px; height:10px; border-radius:50%;
+    display:inline-block; cursor:pointer;
+    background:#c8e06a; border:2px solid #2d9e6b;
+    transition:all 0.25s;
   }}
+  #dots span.active {{ background:#2d9e6b; transform:scale(1.3); }}
+  #counter {{ color:#888; font-size:13px; font-weight:600; letter-spacing:0.5px; }}
   #nav {{ display:flex; gap:8px; }}
   #nav button {{
-    background:transparent; border:2px solid #2d9e6b; color:#2d9e6b;
+    background:#fff; border:2px solid #2d9e6b; color:#2d9e6b;
     border-radius:6px; padding:5px 14px; font-size:13px;
     font-weight:700; cursor:pointer; transition:all 0.2s;
   }}
   #nav button:hover {{ background:#2d9e6b; color:#fff; }}
-  #counter {{ color:#636e72; font-size:13px; font-weight:600; }}
+  #fs-btn {{
+    background:linear-gradient(135deg,#2d9e6b,#c8e06a) !important;
+    color:#0d1f16 !important; border:none !important;
+    padding:6px 16px !important;
+  }}
+  #fs-btn:hover {{ opacity:0.88; }}
 </style>
 </head>
 <body>
 <div id="wrap">
+
+  <!-- HEADER -->
   <div id="hdr">
-    <div style="min-width:150px;">{logo_izq_tag}</div>
+    <div class="logo-box left">{logo_izq_tag}</div>
     <div id="titulo"></div>
-    <div style="min-width:150px;text-align:right;">{logo_der_tag}</div>
+    <div class="logo-box right">{logo_der_tag}</div>
   </div>
+
+  <!-- PROGRESO -->
   <div id="progbar-wrap"><div id="progbar"></div></div>
+
+  <!-- CUERPO -->
   <div id="body">
     <div id="plt"></div>
     <div id="html-content"></div>
   </div>
+
+  <!-- FOOTER -->
   <div id="footer">
     <div id="dots"></div>
     <div id="counter"></div>
     <div id="nav">
-      <button onclick="manualPrev()">&#8592; Ant</button>
-      <button onclick="manualNext()">Sig &#8594;</button>
-      <button onclick="toggleFS()" id="fs-btn"
-        style="background:linear-gradient(135deg,#2d9e6b,#c8e06a);
-               color:#0d1f16;border:none;">
-        &#x26F6; Pantalla completa
-      </button>
+      <button onclick="manualPrev()">&#8592;</button>
+      <button onclick="manualNext()">&#8594;</button>
+      <button onclick="toggleFS()" id="fs-btn">&#x26F6; Fullscreen</button>
     </div>
   </div>
+
 </div>
 
 <script>
@@ -470,10 +507,10 @@ function goTo(i) {{
       autosize        : false,
       width           : W,
       height          : H,
-      paper_bgcolor   : '#ffffff',
+      paper_bgcolor   : '#f8fdf9',
       plot_bgcolor    : '#ffffff',
-      margin          : {{ l:60, r:40, t:30, b:60 }},
-      font            : {{ family:'Arial', size:13 }}
+      margin          : {{ l:72, r:48, t:28, b:72 }},
+      font            : {{ family:'Arial', size:14 }}
     }});
     Plotly.react('plt', SLIDES[i].fig.data, lay,
                  {{displayModeBar:false, responsive:false}});
@@ -484,7 +521,7 @@ function goTo(i) {{
   }}
 
   document.querySelectorAll('#dots span').forEach(function(d,j){{
-    d.style.background = j===i ? '#2d9e6b' : '#c8e06a';
+    d.className = j===i ? 'active' : '';
   }});
 
   clearInterval(ptmr);
@@ -930,7 +967,7 @@ if menu == "📦 Importaciones":
                     <div style="color:#e8a020;font-weight:bold;font-size:0.9em;margin-top:10px;">
                         📅 {row.get("FCH ESTIMADA","")}</div>
                 </div>"""
-            apertura_html = f'<div style="display:flex;gap:16px;flex-wrap:wrap;padding:20px;">{cards}</div>'
+            apertura_html = f'<div style="display:flex;gap:20px;flex-wrap:wrap;padding:32px 24px;align-items:stretch;height:100%;align-content:center;">{cards}</div>'
 
         # Slide 2: tabla status
         status_html = ""
