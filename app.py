@@ -340,12 +340,8 @@ def _logos_b64():
 
 
 
+
 def mostrar_seccion_ppt(titulo_seccion, slides):
-    """
-    Botón que abre overlay con carrusel cada 5 seg.
-    Usa plotly JSON nativo — no depende de to_html.
-    slides = [(titulo_slide, fig), ...]
-    """
     import plotly.io as pio
 
     slides = [(t, f) for t, f in slides if f is not None]
@@ -354,124 +350,108 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
 
     logo_izq, logo_der = _logos_b64()
     sid = "ppt_" + str(abs(hash(titulo_seccion)) % 100000)
-    logo_izq_tag = f'<img src="{logo_izq}" style="height:56px;object-fit:contain;">' if logo_izq else ""
-    logo_der_tag = f'<img src="{logo_der}" style="height:56px;object-fit:contain;">' if logo_der else ""
+    logo_izq_tag = f'<img src="{logo_izq}" style="height:54px;object-fit:contain;">' if logo_izq else "<div></div>"
+    logo_der_tag = f'<img src="{logo_der}" style="height:54px;object-fit:contain;">' if logo_der else "<div></div>"
 
-    # Serializar cada fig como JSON de Plotly (siempre tiene contenido)
     slides_js_parts = []
     for t, f in slides:
         fig_json = pio.to_json(f)
-        slides_js_parts.append(f'{{"titulo": {repr(t)}, "fig": {fig_json}}}')
+        slides_js_parts.append(f'{{"titulo":{repr(t)},"fig":{fig_json}}}')
     slides_js = "[" + ",".join(slides_js_parts) + "]"
 
-    st.markdown(f"""
-<div id="{sid}-ov" style="display:none;position:fixed;inset:0;z-index:99999;
-  background:#ffffff;flex-direction:column;align-items:center;
-  justify-content:flex-start;padding:24px 40px 20px;box-sizing:border-box;
+    # TODO: overlay + boton en UN SOLO bloque HTML para compartir el mismo iframe
+    html = f"""
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+
+<!-- OVERLAY -->
+<div id="{sid}-ov" style="display:none;position:fixed;inset:0;z-index:2147483647;
+  background:#fff;flex-direction:column;align-items:center;
+  justify-content:flex-start;padding:20px 40px 16px;box-sizing:border-box;
   font-family:Arial,sans-serif;">
 
-  <button onclick="window['{sid}_cerrar']()"
-    style="position:absolute;top:14px;right:20px;background:transparent;
+  <button onclick="document.getElementById('{sid}-ov').style.display='none';"
+    style="position:absolute;top:12px;right:18px;background:transparent;
            border:2px solid #2d9e6b;color:#2d9e6b;border-radius:8px;
-           padding:5px 14px;font-size:13px;font-weight:700;cursor:pointer;">
-    &#x2716; Cerrar
+           padding:4px 14px;font-size:13px;font-weight:700;cursor:pointer;">
+    ✖ Cerrar
   </button>
 
   <div style="width:100%;display:flex;align-items:center;
-              justify-content:space-between;margin-bottom:10px;">
+              justify-content:space-between;margin-bottom:8px;">
     <div style="min-width:140px;">{logo_izq_tag}</div>
-    <div id="{sid}-titulo" style="color:#1a7a4a;font-size:1.6rem;font-weight:700;
-         text-align:center;flex:1;padding:0 16px;"></div>
+    <div id="{sid}-tit" style="color:#1a7a4a;font-size:1.5rem;font-weight:700;
+         text-align:center;flex:1;padding:0 12px;"></div>
     <div style="min-width:140px;text-align:right;">{logo_der_tag}</div>
   </div>
 
-  <div style="width:100%;height:5px;background:#e8f5ee;border-radius:3px;margin-bottom:10px;">
-    <div id="{sid}-prog" style="height:5px;background:#2d9e6b;border-radius:3px;
-         width:0%;transition:width 0.08s linear;"></div>
+  <div style="width:100%;height:5px;background:#e8f5ee;border-radius:3px;margin-bottom:8px;">
+    <div id="{sid}-prg" style="height:5px;background:#2d9e6b;border-radius:3px;width:0%;"></div>
   </div>
 
-  <div id="{sid}-body" style="width:100%;flex:1;min-height:0;position:relative;"></div>
+  <div id="{sid}-bdy" style="width:100%;flex:1;min-height:0;">
+    <div id="{sid}-plt" style="width:100%;height:100%;"></div>
+  </div>
 
-  <div id="{sid}-dots" style="margin-top:10px;display:flex;gap:10px;"></div>
+  <div id="{sid}-dts" style="margin-top:8px;display:flex;gap:10px;"></div>
 </div>
 
-<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
-<script>
-(function(){{
-  var SLIDES = {slides_js};
-  var N = SLIDES.length, idx = 0, timer = null, progTimer = null, DELAY = 5000;
-  var divId = '{sid}-body';
-
-  function goTo(i) {{
-    idx = i;
-    document.getElementById('{sid}-titulo').textContent = SLIDES[i].titulo;
-
-    var body = document.getElementById(divId);
-    body.innerHTML = '<div id="{sid}-plotdiv" style="width:100%;height:100%;"></div>';
-
-    var layout = Object.assign({{}}, SLIDES[i].fig.layout, {{
-      width: undefined, height: undefined, autosize: true,
-      paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff'
-    }});
-    Plotly.newPlot('{sid}-plotdiv', SLIDES[i].fig.data, layout,
-                  {{responsive: true, displayModeBar: false}});
-
-    document.getElementById('{sid}-dots').querySelectorAll('span').forEach(function(d,j){{
-      d.style.background = j===i ? '#2d9e6b' : '#c8e06a';
-    }});
-    clearInterval(progTimer);
-    var prog = document.getElementById('{sid}-prog'), start = Date.now();
-    prog.style.width = '0%';
-    progTimer = setInterval(function(){{
-      prog.style.width = Math.min(100,(Date.now()-start)/DELAY*100)+'%';
-    }}, 50);
-  }}
-
-  function next(){{ goTo((idx+1)%N); }}
-
-  window['{sid}_abrir'] = function(){{
-    var ov = document.getElementById('{sid}-ov');
-    ov.style.display = 'flex';
-    var dotsEl = document.getElementById('{sid}-dots');
-    dotsEl.innerHTML = '';
-    SLIDES.forEach(function(_,j){{
-      var d = document.createElement('span');
-      d.style.cssText = 'width:11px;height:11px;border-radius:50%;display:inline-block;cursor:pointer;background:#c8e06a;';
-      d.onclick = function(){{ clearInterval(timer); goTo(j); timer=setInterval(next,DELAY); }};
-      dotsEl.appendChild(d);
-    }});
-    goTo(0);
-    timer = setInterval(next, DELAY);
-    if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
-  }};
-
-  window['{sid}_cerrar'] = function(){{
-    clearInterval(timer); clearInterval(progTimer);
-    document.getElementById('{sid}-ov').style.display='none';
-    if(document.exitFullscreen) document.exitFullscreen();
-  }};
-
-  document.addEventListener('keydown', function(e){{
-    if(e.key==='Escape' && window['{sid}_cerrar']) window['{sid}_cerrar']();
-    if(e.key==='ArrowRight'){{ clearInterval(timer); next(); timer=setInterval(next,DELAY); }}
-    if(e.key==='ArrowLeft'){{ clearInterval(timer); goTo((idx-1+N)%N); timer=setInterval(next,DELAY); }}
-  }});
-}})();
-</script>
-""", unsafe_allow_html=True)
-
-    # Botón HTML puro — no pasa por el ciclo rerun de Streamlit
-    st.markdown(f"""
-<div style="margin-top:8px;">
-  <button onclick="window['{sid}_abrir']()"
-    style="background:linear-gradient(135deg,#2d9e6b,#c8e06a);
-           color:#0d1f16;border:none;border-radius:8px;
-           padding:10px 26px;font-size:14px;font-weight:700;
-           cursor:pointer;letter-spacing:0.3px;">
+<!-- BOTON -->
+<div style="margin-top:10px;">
+  <button id="{sid}-btn"
+    style="background:linear-gradient(135deg,#2d9e6b,#c8e06a);color:#0d1f16;
+           border:none;border-radius:8px;padding:10px 26px;font-size:14px;
+           font-weight:700;cursor:pointer;">
     &#128250; Ver en presentaci&#243;n
   </button>
 </div>
-""", unsafe_allow_html=True)
+
+<script>
+(function(){{
+  var SLIDES={slides_js}, N=SLIDES.length, idx=0, tmr=null, ptmr=null, DL=5000;
+
+  function goTo(i){{
+    idx=i;
+    document.getElementById('{sid}-tit').textContent=SLIDES[i].titulo;
+    var lay=Object.assign({{}},SLIDES[i].fig.layout,{{autosize:true,width:undefined,height:undefined,paper_bgcolor:'#fff',plot_bgcolor:'#fff'}});
+    Plotly.react('{sid}-plt', SLIDES[i].fig.data, lay, {{responsive:true,displayModeBar:false}});
+    document.getElementById('{sid}-dts').querySelectorAll('span').forEach(function(d,j){{
+      d.style.background=j===i?'#2d9e6b':'#c8e06a';
+    }});
+    clearInterval(ptmr);
+    var prg=document.getElementById('{sid}-prg'), t0=Date.now();
+    prg.style.width='0%';
+    ptmr=setInterval(function(){{prg.style.width=Math.min(100,(Date.now()-t0)/DL*100)+'%';}},50);
+  }}
+
+  function next(){{goTo((idx+1)%N);}}
+
+  function abrir(){{
+    var ov=document.getElementById('{sid}-ov');
+    ov.style.display='flex';
+    var dts=document.getElementById('{sid}-dts');
+    dts.innerHTML='';
+    SLIDES.forEach(function(_,j){{
+      var d=document.createElement('span');
+      d.style.cssText='width:11px;height:11px;border-radius:50%;display:inline-block;cursor:pointer;background:#c8e06a;';
+      d.onclick=function(){{clearInterval(tmr);goTo(j);tmr=setInterval(next,DL);}};
+      dts.appendChild(d);
+    }});
+    goTo(0);
+    tmr=setInterval(next,DL);
+    if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+  }}
+
+  document.getElementById('{sid}-btn').addEventListener('click', abrir);
+
+  document.addEventListener('keydown',function(e){{
+    if(e.key==='Escape'){{clearInterval(tmr);clearInterval(ptmr);document.getElementById('{sid}-ov').style.display='none';if(document.exitFullscreen)document.exitFullscreen();}}
+    if(e.key==='ArrowRight'){{clearInterval(tmr);next();tmr=setInterval(next,DL);}}
+    if(e.key==='ArrowLeft'){{clearInterval(tmr);goTo((idx-1+N)%N);tmr=setInterval(next,DL);}}
+  }});
+}})();
+</script>
+"""
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def _render_top10(df, n=10):
