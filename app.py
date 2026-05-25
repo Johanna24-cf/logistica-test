@@ -9,6 +9,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import date, datetime
 import os
 import base64
+import time
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -477,14 +478,56 @@ def render_dash_despachos():
     if faltantes:
         st.error(f"❌ Columnas faltantes en el sheet: {', '.join(faltantes)}")
         return
-    st.markdown('<div class="titulo-seccion">📊 Dashboard de Despachos</div>', unsafe_allow_html=True)
-    _render_metricas_despachos(df)
-    st.divider()
-    _render_top10(df)
-    st.divider()
-    _render_evolutivo(df)
-    st.divider()
-    _render_heatmap(df)
+
+    # ── Configuración carrusel ──────────────────────────────────────────────
+    SEGUNDOS = st.sidebar.slider("⏱ Segundos por sección", 5, 60, 15, 5)
+
+    SECCIONES = [
+        ("📊 Métricas generales",  lambda: _render_metricas_despachos(df)),
+        ("🏆 Top SKUs",            lambda: _render_top10(df)),
+        ("📈 Evolutivo mensual",   lambda: _render_evolutivo(df)),
+        ("🗺️ Mapa de calor",      lambda: _render_heatmap(df)),
+    ]
+    N = len(SECCIONES)
+
+    # Índice de sección actual en session_state
+    if "carrusel_idx" not in st.session_state:
+        st.session_state["carrusel_idx"] = 0
+
+    # Barra de navegación manual
+    nav_cols = st.columns(N + 1)
+    for j, (nombre, _) in enumerate(SECCIONES):
+        if nav_cols[j].button(nombre, key=f"nav_{j}"):
+            st.session_state["carrusel_idx"] = j
+    pausa = nav_cols[N].checkbox("⏸ Pausar", value=False, key="carrusel_pausa")
+
+    st.markdown(
+        f'<div class="titulo-seccion">'
+        f'{SECCIONES[st.session_state["carrusel_idx"]][0]}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Barra de progreso
+    progreso = st.progress(0)
+    contenido = st.empty()
+
+    # Renderizar sección actual
+    with contenido.container():
+        SECCIONES[st.session_state["carrusel_idx"]][1]()
+
+    # Loop de avance automático
+    if not pausa:
+        pasos = 40  # cuántos ticks por segundo de espera
+        for tick in range(pasos * SEGUNDOS):
+            time.sleep(1 / pasos)
+            progreso.progress((tick + 1) / (pasos * SEGUNDOS))
+
+        progreso.empty()
+        st.session_state["carrusel_idx"] = (st.session_state["carrusel_idx"] + 1) % N
+        st.rerun()
+    else:
+        progreso.empty()
 
 
 # =========================================================
@@ -558,77 +601,106 @@ menu = st.sidebar.radio("MENÚ PRINCIPAL", [
 # MENÚ: IMPORTACIONES
 # ----------------------------------------------------------
 if menu == "📦 Importaciones":
-    (tab_dash,) = st.tabs(["📊 Dash Importación"])
+    (tab_dash,) = st.tabs(["📊 Dash Importacion"])
 
     with tab_dash:
-        st.subheader("🏪 Próximas Aperturas de Tiendas - Perú")
-        if not df_tiendas.empty:
-            columnas_tiendas_req = ["ESTADO", "FCH ESTIMADA", "TIENDA", "DESCRIPCION"]
-            if all(col in df_tiendas.columns for col in columnas_tiendas_req):
-                df_ap = df_tiendas[df_tiendas["ESTADO"].str.upper().str.contains("PENDIENTE", na=False)].copy()
-                df_ap["FCH_DT"] = pd.to_datetime(df_ap["FCH ESTIMADA"], dayfirst=True, errors='coerce')
-                df_filtrado = df_ap[df_ap["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
-                cols = st.columns(4)
-                for i, (_, row) in enumerate(df_filtrado.iterrows()):
-                    with cols[i % 4]:
-                        st.markdown(f'''<div class="apertura-card">
-                            <div class="tienda-titulo">🏪 {row["TIENDA"]}</div>
-                            <div class="desc-tienda">{row["DESCRIPCION"]}</div>
-                            <div class="fecha-est">📅 {row.get("FCH ESTIMADA","")}</div>
-                        </div>''', unsafe_allow_html=True)
+
+        # ── Funciones de cada sección ───────────────────────────────────────
+        def _sec_aperturas():
+            st.markdown('<div class="titulo-seccion">🏪 Próximas Aperturas</div>', unsafe_allow_html=True)
+            if not df_tiendas.empty:
+                columnas_tiendas_req = ["ESTADO", "FCH ESTIMADA", "TIENDA", "DESCRIPCION"]
+                if all(col in df_tiendas.columns for col in columnas_tiendas_req):
+                    df_ap = df_tiendas[df_tiendas["ESTADO"].str.upper().str.contains("PENDIENTE", na=False)].copy()
+                    df_ap["FCH_DT"] = pd.to_datetime(df_ap["FCH ESTIMADA"], dayfirst=True, errors='coerce')
+                    df_filtrado = df_ap[df_ap["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
+                    cols = st.columns(4)
+                    for i, (_, row) in enumerate(df_filtrado.iterrows()):
+                        with cols[i % 4]:
+                            st.markdown(f'''<div class="apertura-card">
+                                <div class="tienda-titulo">🏪 {row["TIENDA"]}</div>
+                                <div class="desc-tienda">{row["DESCRIPCION"]}</div>
+                                <div class="fecha-est">📅 {row.get("FCH ESTIMADA","")}</div>
+                            </div>''', unsafe_allow_html=True)
+                else:
+                    st.warning("⚠️ Columnas faltantes en 'TIENDAS CARCASAS'")
+
+        def _sec_status():
+            st.markdown('<div class="titulo-seccion">📋 Status Global Importaciones</div>', unsafe_allow_html=True)
+            if not df_import.empty:
+                columnas_import_req = ["NOMBRE CORREO", "HORA FECH", "STATUS", "FCH LLEGADA"]
+                columnas_faltantes = [c for c in columnas_import_req if c not in df_import.columns]
+                if columnas_faltantes:
+                    st.error(f"❌ Columnas faltantes: {', '.join(columnas_faltantes)}")
+                else:
+                    m1, m2, m3 = st.columns(3)
+                    total     = df_import["NOMBRE CORREO"].nunique()
+                    arribados = df_import[df_import["STATUS"] == "ARRIBADO"]["NOMBRE CORREO"].nunique()
+                    m1.metric("Total Docs", total)
+                    m2.metric("Arribados", arribados)
+                    m3.metric("En Tránsito", total - arribados)
+                    st.divider()
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.write("### ⏳ Pendientes")
+                        df_pend = (
+                            df_import[df_import["STATUS"] != "ARRIBADO"]
+                            .groupby(["NOMBRE CORREO", "HORA FECH", "STATUS"])
+                            .size().reset_index(name="ASNs")
+                        )
+                        orden_status = {"ADUANAS": 0, "EN TRÁNSITO": 1, "EN TRANSITO": 1, "ORIGEN": 2}
+                        df_pend["_orden"] = df_pend["STATUS"].str.upper().str.strip().map(orden_status).fillna(
+                            df_pend["STATUS"].apply(lambda s: 99 if str(s).strip() == "" else 3)
+                        )
+                        df_pend = df_pend.sort_values("_orden").drop(columns=["_orden"])
+                        st.dataframe(df_pend, use_container_width=True, hide_index=True)
+                    with c2:
+                        st.write("### ✅ Arribados")
+                        df_arr = (
+                            df_import[df_import["STATUS"] == "ARRIBADO"]
+                            .groupby(["NOMBRE CORREO", "FCH LLEGADA"])
+                            .size().reset_index(name="ASNs")
+                        )
+                        df_arr["_fch_dt"] = pd.to_datetime(df_arr["FCH LLEGADA"], errors="coerce")
+                        df_arr = df_arr.sort_values("_fch_dt", ascending=False, na_position="last").drop(columns=["_fch_dt"])
+                        st.dataframe(df_arr, use_container_width=True, hide_index=True)
             else:
-                st.warning("⚠️ Columnas faltantes en 'TIENDAS CARCASAS'")
+                st.info("ℹ️ No hay registros con RECUENTO = 1, o la hoja está vacía.")
 
-        st.markdown('<div class="titulo-seccion">STATUS GLOBAL</div>', unsafe_allow_html=True)
-        if not df_import.empty:
-            columnas_import_req = ["NOMBRE CORREO", "HORA FECH", "STATUS", "FCH LLEGADA"]
-            columnas_faltantes = [c for c in columnas_import_req if c not in df_import.columns]
+        # ── Carrusel importaciones ──────────────────────────────────────────
+        SEGUNDOS_IMP = st.sidebar.slider("⏱ Segundos por sección", 5, 60, 15, 5, key="slider_imp")
 
-            if columnas_faltantes:
-                st.error(f"❌ Columnas faltantes: {', '.join(columnas_faltantes)}")
-            else:
-                m1, m2, m3 = st.columns(3)
-                total     = df_import["NOMBRE CORREO"].nunique()
-                arribados = df_import[df_import["STATUS"] == "ARRIBADO"]["NOMBRE CORREO"].nunique()
-                m1.metric("Total Importaciones", total)
-                m2.metric("Arribados", arribados)
-                m3.metric("En Tránsito", total - arribados)
+        SECCIONES_IMP = [
+            ("🏪 Próximas Aperturas",       _sec_aperturas),
+            ("📋 Status Importaciones",      _sec_status),
+        ]
+        N_IMP = len(SECCIONES_IMP)
 
-                st.divider()
-                c1, c2 = st.columns(2)
+        if "carrusel_imp_idx" not in st.session_state:
+            st.session_state["carrusel_imp_idx"] = 0
 
-                with c1:
-                    st.write("### ⏳ Pendientes de arribo")
-                    df_pend = (
-                        df_import[df_import["STATUS"] != "ARRIBADO"]
-                        .groupby(["NOMBRE CORREO", "HORA FECH", "STATUS"])
-                        .size()
-                        .reset_index(name="ASNs")
-                    )
-                    orden_status = {"ADUANAS": 0, "EN TRÁNSITO": 1, "EN TRANSITO": 1, "ORIGEN": 2}
-                    df_pend["_orden"] = df_pend["STATUS"].str.upper().str.strip().map(orden_status).fillna(
-                        df_pend["STATUS"].apply(lambda s: 99 if str(s).strip() == "" else 3)
-                    )
-                    df_pend = df_pend.sort_values("_orden").drop(columns=["_orden"])
-                    st.dataframe(df_pend, use_container_width=True, hide_index=True)
+        nav_cols = st.columns(N_IMP + 1)
+        for j, (nombre, _) in enumerate(SECCIONES_IMP):
+            if nav_cols[j].button(nombre, key=f"nav_imp_{j}"):
+                st.session_state["carrusel_imp_idx"] = j
+        pausa_imp = nav_cols[N_IMP].checkbox("⏸ Pausar", value=False, key="pausa_imp")
 
-                with c2:
-                    st.write("### ✅ Arribados en almacén")
-                    df_arr = (
-                        df_import[df_import["STATUS"] == "ARRIBADO"]
-                        .groupby(["NOMBRE CORREO", "FCH LLEGADA"])
-                        .size()
-                        .reset_index(name="ASNs")
-                    )
-                    df_arr["_fch_dt"] = pd.to_datetime(df_arr["FCH LLEGADA"], errors="coerce")
-                    df_arr = df_arr.sort_values("_fch_dt", ascending=False, na_position="last").drop(columns=["_fch_dt"])
-                    st.dataframe(df_arr, use_container_width=True, hide_index=True)
+        progreso_imp = st.progress(0)
+        contenido_imp = st.empty()
+
+        with contenido_imp.container():
+            SECCIONES_IMP[st.session_state["carrusel_imp_idx"]][1]()
+
+        if not pausa_imp:
+            pasos = 40
+            for tick in range(pasos * SEGUNDOS_IMP):
+                time.sleep(1 / pasos)
+                progreso_imp.progress((tick + 1) / (pasos * SEGUNDOS_IMP))
+            progreso_imp.empty()
+            st.session_state["carrusel_imp_idx"] = (st.session_state["carrusel_imp_idx"] + 1) % N_IMP
+            st.rerun()
         else:
-            st.info("ℹ️ No hay registros con RECUENTO = 1, o la hoja está vacía.")
-
-    # tab_recep oculto (modo pantalla)
-
-    # tab_ops oculto (modo pantalla)
+            progreso_imp.empty()
 
 # MENÚ DISTRIBUCIÓN oculto (modo pantalla)
 
