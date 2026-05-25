@@ -474,11 +474,18 @@ function goTo(i) {{
     plt.style.display='block'; htm.style.display='none';
     var W=body.clientWidth-6, H=body.clientHeight-6;
     var base=SLIDES[i].fig.layout||{{}};
+    // Detectar si es heatmap (imshow tiene 'heatmap' en el tipo)
+    var isHeatmap = SLIDES[i].fig.data && SLIDES[i].fig.data[0] && SLIDES[i].fig.data[0].type==='heatmap';
+    var mg = isHeatmap
+      ? {{l:160, r:20, t:50, b:20}}   // heatmap: eje Y largo a la izq
+      : {{l:65,  r:65, t:30, b:70}};  // resto: margen simétrico p/no cortar eje X
     var lay=Object.assign({{}},base,{{
       autosize:false, width:W, height:H,
       paper_bgcolor:'#ffffff', plot_bgcolor:'#ffffff',
-      margin:{{l:160,r:30,t:30,b:60}},
-      font:{{family:'Arial',size:13}}
+      margin: mg,
+      font:{{family:'Arial',size:13}},
+      yaxis: isHeatmap ? Object.assign({{}}, base.yaxis||{{}}, {{title:'', tickfont:{{size:11.5}}}}) : (base.yaxis||{{}}),
+      xaxis: isHeatmap ? Object.assign({{}}, base.xaxis||{{}}, {{title:'', tickfont:{{size:12}},  side:'top'}}) : (base.xaxis||{{}})
     }});
     Plotly.react('plt-div',SLIDES[i].fig.data,lay,{{displayModeBar:false,responsive:false}});
   }} else {{
@@ -889,7 +896,7 @@ if menu == "📦 Importaciones":
         # Slide única combinada: aperturas + métricas + tablas
         def _card_ap(tienda, desc, fecha):
             return (
-                '<div style="flex:1;min-width:160px;background:#fff;border-radius:12px;'
+                '<div style="background:#fff;border-radius:12px;'
                 'border-top:4px solid #2d9e6b;padding:12px 14px;'
                 'box-shadow:0 2px 8px rgba(45,158,107,0.12);">'
                 '<div style="color:#1a7a4a;font-size:.95rem;font-weight:700;">🏪 ' + tienda + '</div>'
@@ -910,7 +917,10 @@ if menu == "📦 Importaciones":
             )
 
         def _tbl(df, mx=25):
-            df = df.head(mx)
+            # Quitar filas donde todos los valores relevantes están vacíos
+            df = df[df.apply(lambda row: any(
+                str(v).strip() not in ('', '-', 'nan', 'None') for v in row
+            ), axis=1)].head(mx)
             heads = "".join(
                 '<th style="padding:5px 8px;background:#2d9e6b;color:#fff;font-size:11px;'
                 'font-weight:700;text-align:left;position:sticky;top:0;">' + str(c) + '</th>'
@@ -989,11 +999,11 @@ if menu == "📦 Importaciones":
                 '<div style="flex-shrink:0;">'
                 '<div style="font-size:10px;font-weight:700;color:#2d9e6b;text-transform:uppercase;'
                 'letter-spacing:1px;margin-bottom:7px;">🏪 Próximas Aperturas</div>'
-                '<div style="display:flex;gap:9px;">' + cards_html + '</div>'
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;">' + cards_html + '</div>'
                 '</div>' + sep
                 if cards_html else ""
             ) +
-            ('<div style="display:flex;gap:9px;flex-shrink:0;">' + metricas_html + '</div>'
+            ('<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;flex-shrink:0;">' + metricas_html + '</div>'
              if metricas_html else "") +
             ('<div style="display:flex;gap:9px;flex:1;min-height:0;">' + status_tables + '</div>'
              if status_tables else "") +
