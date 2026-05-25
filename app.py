@@ -985,27 +985,66 @@ if menu == "📦 Importaciones":
             df_arr2["_f"] = pd.to_datetime(df_arr2["FCH LLEGADA"], errors="coerce")
             df_arr2 = df_arr2.sort_values("_f", ascending=False, na_position="last").drop(columns=["_f"])
 
-            def df_to_html_table(df):
-                rows = "".join(f"<tr>{''.join(f'<td style=padding:6px_8px;border-bottom:1px_solid_#e8f5ee;font-size:13px>{v}</td>' for v in r)}</tr>" for r in df.values)
-                heads = "".join(f"<th style='padding:8px;background:#2d9e6b;color:#fff;font-size:13px;'>{c}</th>" for c in df.columns)
-                return f"<table style='width:100%;border-collapse:collapse;'><thead><tr>{heads}</tr></thead><tbody>{rows}</tbody></table>"
+            def df_to_html_table(df, max_rows=30):
+                df = df.head(max_rows)
+                rows = "".join(
+                    "<tr>" + "".join(
+                        f'<td style="padding:5px 10px;border-bottom:1px solid #e8f5ee;font-size:12px;color:#2d3436;">{v}</td>'
+                        for v in r
+                    ) + "</tr>"
+                    for r in df.values
+                )
+                heads = "".join(
+                    f'<th style="padding:7px 10px;background:#2d9e6b;color:#fff;font-size:12px;font-weight:700;text-align:left;">{c}</th>'
+                    for c in df.columns
+                )
+                return f'<table style="width:100%;border-collapse:collapse;"><thead><tr>{heads}</tr></thead><tbody>{rows}</tbody></table>'
 
-            status_html = f"""<div style='padding:20px;'>
-              <div style='display:flex;gap:24px;margin-bottom:20px;'>
-                <div style='background:linear-gradient(135deg,#f0faf4,#e8f5ee);border-left:4px solid #2d9e6b;border-radius:10px;padding:16px 24px;'>
-                  <div style='color:#1a7a4a;font-weight:600;font-size:13px;'>Total Docs</div>
-                  <div style='color:#1a7a4a;font-size:2rem;font-weight:700;'>{total_i}</div></div>
-                <div style='background:linear-gradient(135deg,#f0faf4,#e8f5ee);border-left:4px solid #2d9e6b;border-radius:10px;padding:16px 24px;'>
-                  <div style='color:#1a7a4a;font-weight:600;font-size:13px;'>Arribados</div>
-                  <div style='color:#1a7a4a;font-size:2rem;font-weight:700;'>{arr_i}</div></div>
-                <div style='background:linear-gradient(135deg,#f0faf4,#e8f5ee);border-left:4px solid #2d9e6b;border-radius:10px;padding:16px 24px;'>
-                  <div style='color:#1a7a4a;font-weight:600;font-size:13px;'>En Tránsito</div>
-                  <div style='color:#1a7a4a;font-size:2rem;font-weight:700;'>{trans_i}</div></div>
-              </div>
-              <div style='display:flex;gap:24px;'>
-                <div style='flex:1;'><h3 style='color:#1a7a4a;margin-bottom:8px;'>⏳ Pendientes</h3>{df_to_html_table(df_pend2)}</div>
-                <div style='flex:1;'><h3 style='color:#1a7a4a;margin-bottom:8px;'>✅ Arribados</h3>{df_to_html_table(df_arr2)}</div>
-              </div></div>"""
+            pct = int(arr_i / total_i * 100) if total_i else 0
+
+            status_html = f'''
+<div style="padding:20px 28px;height:100%;display:flex;flex-direction:column;gap:16px;background:#f8fdf9;font-family:Arial,sans-serif;">
+
+  <div style="display:flex;gap:16px;flex-shrink:0;">
+    <div style="flex:1;background:#fff;border-left:5px solid #2d9e6b;border-radius:12px;padding:14px 20px;box-shadow:0 2px 8px rgba(45,158,107,0.1);">
+      <div style="color:#888;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Total Docs</div>
+      <div style="color:#1a7a4a;font-size:2.2rem;font-weight:800;line-height:1.1;">{total_i}</div>
+    </div>
+    <div style="flex:1;background:#fff;border-left:5px solid #3dbb7e;border-radius:12px;padding:14px 20px;box-shadow:0 2px 8px rgba(45,158,107,0.1);">
+      <div style="color:#888;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Arribados</div>
+      <div style="color:#1a7a4a;font-size:2.2rem;font-weight:800;line-height:1.1;">{arr_i}</div>
+    </div>
+    <div style="flex:1;background:#fff;border-left:5px solid #c8e06a;border-radius:12px;padding:14px 20px;box-shadow:0 2px 8px rgba(45,158,107,0.1);">
+      <div style="color:#888;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">En Tránsito</div>
+      <div style="color:#1a7a4a;font-size:2.2rem;font-weight:800;line-height:1.1;">{trans_i}</div>
+    </div>
+    <div style="flex:1;background:#fff;border-left:5px solid #e8d44d;border-radius:12px;padding:14px 20px;box-shadow:0 2px 8px rgba(45,158,107,0.1);">
+      <div style="color:#888;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">% Completado</div>
+      <div style="color:#1a7a4a;font-size:2.2rem;font-weight:800;line-height:1.1;">{pct}%</div>
+      <div style="margin-top:6px;height:6px;background:#e8f5ee;border-radius:3px;">
+        <div style="height:6px;background:linear-gradient(90deg,#2d9e6b,#c8e06a);border-radius:3px;width:{pct}%;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:16px;flex:1;min-height:0;">
+    <div style="flex:1;background:#fff;border-radius:12px;padding:14px 16px;box-shadow:0 2px 8px rgba(45,158,107,0.08);display:flex;flex-direction:column;">
+      <div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;display:flex;align-items:center;gap:8px;">
+        ⏳ Pendientes
+        <span style="background:#fff3e0;color:#e8a020;border-radius:20px;padding:2px 10px;font-size:11px;">{len(df_pend2)} docs</span>
+      </div>
+      <div style="overflow-y:auto;flex:1;">{df_to_html_table(df_pend2)}</div>
+    </div>
+    <div style="flex:1;background:#fff;border-radius:12px;padding:14px 16px;box-shadow:0 2px 8px rgba(45,158,107,0.08);display:flex;flex-direction:column;">
+      <div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;display:flex;align-items:center;gap:8px;">
+        ✅ Arribados
+        <span style="background:#e8f5ee;color:#2d9e6b;border-radius:20px;padding:2px 10px;font-size:11px;">{len(df_arr2)} docs</span>
+      </div>
+      <div style="overflow-y:auto;flex:1;">{df_to_html_table(df_arr2)}</div>
+    </div>
+  </div>
+
+</div>'''
 
         slides_imp = []
         if apertura_html:
