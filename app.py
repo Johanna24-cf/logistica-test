@@ -352,8 +352,9 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
         return
 
     logo_izq, logo_der = _logos_b64()
-    logo_izq_tag = f'<img src="{logo_izq}" style="height:54px;object-fit:contain;">' if logo_izq else ""
-    logo_der_tag = f'<img src="{logo_der}" style="height:54px;object-fit:contain;">' if logo_der else ""
+    sid = "s" + str(abs(hash(titulo_seccion)) % 100000)
+    logo_izq_tag = f'<img src="{logo_izq}" style="max-height:56px;max-width:180px;object-fit:contain;">' if logo_izq else ""
+    logo_der_tag = f'<img src="{logo_der}" style="max-height:56px;max-width:180px;object-fit:contain;">' if logo_der else ""
 
     slides_js_parts = []
     for t, f in slides:
@@ -371,240 +372,178 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 <style>
   * {{ box-sizing:border-box; margin:0; padding:0; }}
-  html, body {{ width:100%; height:100%; background:#f8fdf9; font-family:Arial,sans-serif; overflow:hidden; }}
-
+  html, body {{ width:100%; height:100%; background:#f0faf4; font-family:Arial,sans-serif; overflow:hidden; }}
   #wrap {{
-    width:100%; height:100vh;
-    display:flex; flex-direction:column;
-    background:#f8fdf9;
+    width:100%; height:100vh; display:flex; flex-direction:column;
+    padding:10px 20px 10px; gap:8px;
   }}
-
-  /* ── HEADER ── */
+  /* HEADER */
   #hdr {{
     display:flex; align-items:center; justify-content:space-between;
-    background:#fff;
-    border-bottom:3px solid #2d9e6b;
-    padding:10px 32px;
-    flex-shrink:0;
-    min-height:78px;
+    background:#fff; border-radius:12px;
+    border:2px solid #2d9e6b;
+    padding:8px 20px; flex-shrink:0;
   }}
-  .logo-box {{
-    width:200px; display:flex; align-items:center;
-  }}
-  .logo-box.right {{ justify-content:flex-end; }}
-  .logo-box img {{
-    max-height:58px; max-width:190px;
-    object-fit:contain; display:block;
-  }}
+  .logo-w {{ width:190px; display:flex; align-items:center; }}
+  .logo-w.r {{ justify-content:flex-end; }}
   #titulo {{
-    color:#1a7a4a; font-size:1.75rem; font-weight:800;
-    text-align:center; flex:1; padding:0 16px;
-    letter-spacing:-0.3px; line-height:1.2;
+    color:#1a7a4a; font-size:1.5rem; font-weight:800;
+    text-align:center; flex:1; padding:0 10px;
   }}
-
-  /* ── BARRA PROGRESO ── */
-  #progbar-wrap {{
-    width:100%; height:4px; background:#e0f2e9; flex-shrink:0;
-  }}
-  #progbar {{
-    height:4px; background:linear-gradient(90deg,#2d9e6b,#c8e06a);
-    border-radius:0; width:0%; transition:width 0.05s linear;
-  }}
-
-  /* ── CUERPO ── */
+  /* PROGRESO */
+  #pw {{ width:100%; height:5px; background:#c8e06a; border-radius:3px; flex-shrink:0; }}
+  #pb {{ height:5px; background:#1a7a4a; border-radius:3px; width:0%; transition:width 0.05s linear; }}
+  /* CUERPO con marco */
   #body {{
-    flex:1; min-height:0; width:100%;
-    padding:16px 32px 8px; overflow:hidden;
+    flex:1; min-height:0;
+    border:3px solid #2d9e6b; border-radius:14px;
+    background:#fff; overflow:hidden;
     display:flex; align-items:stretch;
   }}
-  #plt {{ width:100%; height:100%; }}
-  #html-content {{
-    width:100%; height:100%; overflow:auto; display:none;
-  }}
-
-  /* ── FOOTER ── */
+  #plt-div {{ width:100%; height:100%; }}
+  #html-div {{ width:100%; height:100%; overflow-y:auto; overflow-x:hidden; display:none; }}
+  /* FOOTER */
   #footer {{
     display:flex; align-items:center; justify-content:space-between;
-    background:#fff; border-top:1px solid #e0f2e9;
-    padding:8px 32px; flex-shrink:0; min-height:48px;
+    background:#fff; border-radius:12px;
+    border:2px solid #c8e06a;
+    padding:6px 16px; flex-shrink:0;
   }}
-  #dots {{ display:flex; gap:10px; align-items:center; }}
+  #dots {{ display:flex; gap:8px; align-items:center; }}
   #dots span {{
     width:10px; height:10px; border-radius:50%;
     display:inline-block; cursor:pointer;
     background:#c8e06a; border:2px solid #2d9e6b;
     transition:all 0.25s;
   }}
-  #dots span.active {{ background:#2d9e6b; transform:scale(1.3); }}
-  #counter {{ color:#888; font-size:13px; font-weight:600; letter-spacing:0.5px; }}
+  #dots span.on {{ background:#1a7a4a; transform:scale(1.35); }}
+  #ctr {{ color:#636e72; font-size:12px; font-weight:700; }}
   #nav {{ display:flex; gap:8px; }}
   #nav button {{
     background:#fff; border:2px solid #2d9e6b; color:#2d9e6b;
-    border-radius:6px; padding:5px 14px; font-size:13px;
+    border-radius:6px; padding:4px 14px; font-size:13px;
     font-weight:700; cursor:pointer; transition:all 0.2s;
   }}
   #nav button:hover {{ background:#2d9e6b; color:#fff; }}
-  #fs-btn {{
+  #fsb {{
     background:linear-gradient(135deg,#2d9e6b,#c8e06a) !important;
     color:#0d1f16 !important; border:none !important;
-    padding:6px 16px !important;
   }}
-  #fs-btn:hover {{ opacity:0.88; }}
 </style>
 </head>
 <body>
 <div id="wrap">
 
-  <!-- HEADER -->
   <div id="hdr">
-    <div class="logo-box left">{logo_izq_tag}</div>
+    <div class="logo-w">{logo_izq_tag}</div>
     <div id="titulo"></div>
-    <div class="logo-box right">{logo_der_tag}</div>
+    <div class="logo-w r">{logo_der_tag}</div>
   </div>
 
-  <!-- PROGRESO -->
-  <div id="progbar-wrap"><div id="progbar"></div></div>
+  <div id="pw"><div id="pb"></div></div>
 
-  <!-- CUERPO -->
   <div id="body">
-    <div id="plt"></div>
-    <div id="html-content"></div>
+    <div id="plt-div"></div>
+    <div id="html-div"></div>
   </div>
 
-  <!-- FOOTER -->
   <div id="footer">
     <div id="dots"></div>
-    <div id="counter"></div>
+    <div id="ctr"></div>
     <div id="nav">
-      <button onclick="manualPrev()">&#8592;</button>
-      <button onclick="manualNext()">&#8594;</button>
-      <button onclick="toggleFS()" id="fs-btn">&#x26F6; Fullscreen</button>
+      <button onclick="mPrev()">&#8592;</button>
+      <button onclick="mNext()">&#8594;</button>
+      <button id="fsb" onclick="toggleFS()">&#x26F6; Fullscreen</button>
     </div>
   </div>
 
 </div>
-
 <script>
-var SLIDES = {slides_js};
-var N=SLIDES.length, idx=0, tmr=null, ptmr=null, DL=5000;
+var SLIDES={slides_js}, N=SLIDES.length, idx=0, tmr=null, ptmr=null, DL=5000;
 
 function goTo(i) {{
-  idx = i;
+  idx=i;
   document.getElementById('titulo').textContent = SLIDES[i].titulo;
-  document.getElementById('counter').textContent = (i+1)+' / '+N;
+  document.getElementById('ctr').textContent = (i+1)+' / '+N;
 
-  var plt     = document.getElementById('plt');
-  var htmlDiv = document.getElementById('html-content');
+  var plt = document.getElementById('plt-div');
+  var htm = document.getElementById('html-div');
+  var body = document.getElementById('body');
 
-  if (SLIDES[i].tipo === 'plotly') {{
-    plt.style.display     = 'block';
-    htmlDiv.style.display = 'none';
-    var body   = document.getElementById('body');
-    var W      = body.clientWidth;
-    var H      = body.clientHeight;
-    var base   = SLIDES[i].fig.layout || {{}};
-    var lay    = Object.assign({{}}, base, {{
-      autosize        : false,
-      width           : W,
-      height          : H,
-      paper_bgcolor   : '#f8fdf9',
-      plot_bgcolor    : '#ffffff',
-      margin          : {{ l:72, r:48, t:28, b:72 }},
-      font            : {{ family:'Arial', size:14 }}
+  if (SLIDES[i].tipo==='plotly') {{
+    plt.style.display='block'; htm.style.display='none';
+    var W=body.clientWidth-6, H=body.clientHeight-6;
+    var base=SLIDES[i].fig.layout||{{}};
+    var lay=Object.assign({{}},base,{{
+      autosize:false, width:W, height:H,
+      paper_bgcolor:'#ffffff', plot_bgcolor:'#ffffff',
+      margin:{{l:160,r:30,t:30,b:60}},
+      font:{{family:'Arial',size:13}}
     }});
-    Plotly.react('plt', SLIDES[i].fig.data, lay,
-                 {{displayModeBar:false, responsive:false}});
+    Plotly.react('plt-div',SLIDES[i].fig.data,lay,{{displayModeBar:false,responsive:false}});
   }} else {{
-    plt.style.display     = 'none';
-    htmlDiv.style.display = 'block';
-    htmlDiv.innerHTML     = SLIDES[i].content;
+    plt.style.display='none'; htm.style.display='block';
+    htm.innerHTML=SLIDES[i].content;
   }}
 
   document.querySelectorAll('#dots span').forEach(function(d,j){{
-    d.className = j===i ? 'active' : '';
+    d.className=j===i?'on':'';
   }});
 
   clearInterval(ptmr);
-  var prg=document.getElementById('progbar'), t0=Date.now();
-  prg.style.width='0%';
+  var pb=document.getElementById('pb'), t0=Date.now();
+  pb.style.width='0%';
   ptmr=setInterval(function(){{
-    prg.style.width=Math.min(100,(Date.now()-t0)/DL*100)+'%';
+    pb.style.width=Math.min(100,(Date.now()-t0)/DL*100)+'%';
   }},50);
 }}
 
-function next(){{ goTo((idx+1)%N); }}
-function prev(){{ goTo((idx-1+N)%N); }}
-function manualNext(){{ clearInterval(tmr); next(); tmr=setInterval(next,DL); }}
-function manualPrev(){{ clearInterval(tmr); prev(); tmr=setInterval(next,DL); }}
+function next(){{goTo((idx+1)%N);}}
+function mNext(){{clearInterval(tmr);next();tmr=setInterval(next,DL);}}
+function mPrev(){{clearInterval(tmr);goTo((idx-1+N)%N);tmr=setInterval(next,DL);}}
 
-// Construir dots
-(function(){{
-  var dts=document.getElementById('dots');
-  SLIDES.forEach(function(_,j){{
-    var d=document.createElement('span');
-    d.onclick=function(){{ clearInterval(tmr); goTo(j); tmr=setInterval(next,DL); }};
-    dts.appendChild(d);
-  }});
-}})();
-
-// Fullscreen: intentar en el iframe, si falla pedirlo al padre
-function toggleFS() {{
-  var el = document.documentElement;
-  var isFS = document.fullscreenElement || document.webkitFullscreenElement;
-  if (isFS) {{
-    (document.exitFullscreen || document.webkitExitFullscreen || function(){{}}).call(document);
-    document.getElementById('fs-btn').textContent = '\u26F6 Pantalla completa';
+function toggleFS(){{
+  var el=document.documentElement;
+  var isFS=document.fullscreenElement||document.webkitFullscreenElement;
+  if(isFS){{
+    (document.exitFullscreen||document.webkitExitFullscreen||function(){{}}).call(document);
+    document.getElementById('fsb').textContent='⛶ Fullscreen';
   }} else {{
-    // Intentar fullscreen en el iframe directamente
-    if (el.requestFullscreen) {{
+    if(el.requestFullscreen){{
       el.requestFullscreen().then(function(){{
-        document.getElementById('fs-btn').textContent = '\u29C9 Salir fullscreen';
-        // Redibuja gráficos con nuevo tamaño
-        setTimeout(function(){{ goTo(idx); }}, 300);
+        document.getElementById('fsb').textContent='⊠ Salir';
+        setTimeout(function(){{goTo(idx);}},300);
       }}).catch(function(){{
-        // Si el iframe no tiene permiso, pedirlo al documento padre
-        window.parent.postMessage({{type:'requestFullscreen'}}, '*');
+        window.parent.postMessage({{type:'requestFullscreen'}},'*');
       }});
     }} else {{
-      window.parent.postMessage({{type:'requestFullscreen'}}, '*');
+      window.parent.postMessage({{type:'requestFullscreen'}},'*');
     }}
   }}
 }}
 
-// Escuchar respuesta del padre (cuando fullscreen se activa en el padre)
-window.addEventListener('message', function(e){{
-  if(e.data && e.data.type === 'fullscreenGranted') {{
-    document.getElementById('fs-btn').textContent = '\u29C9 Salir fullscreen';
-    setTimeout(function(){{ goTo(idx); }}, 300);
-  }}
+window.addEventListener('resize',function(){{
+  clearTimeout(window._rt);
+  window._rt=setTimeout(function(){{goTo(idx);}},200);
 }});
 
-// Al cambiar tamaño (por fullscreen), redibujar
-window.addEventListener('resize', function(){{
-  clearTimeout(window._resizeTmr);
-  window._resizeTmr = setTimeout(function(){{ goTo(idx); }}, 200);
-}});
-
-// Teclado
 document.addEventListener('keydown',function(e){{
-  if(e.key==='ArrowRight') manualNext();
-  if(e.key==='ArrowLeft')  manualPrev();
-  if(e.key==='F11' || e.key==='f') toggleFS();
-  if(e.key==='Escape') {{
-    document.getElementById('fs-btn').textContent = '\u26F6 Pantalla completa';
-  }}
+  if(e.key==='ArrowRight') mNext();
+  if(e.key==='ArrowLeft')  mPrev();
+  if(e.key==='f'||e.key==='F') toggleFS();
 }});
 
-// Arrancar
-goTo(0);
-tmr=setInterval(next,DL);
-
-// Fullscreen al cargar (necesita interacción del usuario, lo pedimos al padre)
-window.addEventListener('message', function(e){{
-  if(e.data==='requestFullscreen'){{
-    document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
-  }}
-}});
+// Construir dots y arrancar
+(function(){{
+  var dts=document.getElementById('dots');
+  SLIDES.forEach(function(_,j){{
+    var d=document.createElement('span');
+    d.onclick=function(){{clearInterval(tmr);goTo(j);tmr=setInterval(next,DL);}};
+    dts.appendChild(d);
+  }});
+  goTo(0);
+  tmr=setInterval(next,DL);
+}})();
 </script>
 </body>
 </html>"""
@@ -619,21 +558,16 @@ window.addEventListener('message', function(e){{
         st.rerun()
 
     if st.session_state[key]:
-        # Altura = ventana completa menos el header de Streamlit (~80px)
-        # scrolling=False + CSS height:100vh dentro del iframe hace fullscreen real
         components.html(html_completo, height=860, scrolling=False)
-        # JS en la página padre para conceder fullscreen al iframe cuando lo pida
         st.markdown("""
 <script>
 window.addEventListener('message', function(e) {
   if (e.data && e.data.type === 'requestFullscreen') {
-    // Buscar el iframe del componente (el último añadido)
     var iframes = document.querySelectorAll('iframe');
-    var target = iframes[iframes.length - 1];
+    var target = iframes[iframes.length-2];
     if (target) {
-      target.setAttribute('allowfullscreen', '');
-      (target.requestFullscreen || target.webkitRequestFullscreen ||
-       function(){}).call(target);
+      target.setAttribute('allowfullscreen','');
+      (target.requestFullscreen||target.webkitRequestFullscreen||function(){}).call(target);
     }
   }
 });
