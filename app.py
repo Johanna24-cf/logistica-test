@@ -601,7 +601,17 @@ document.addEventListener('keydown',function(e){{
         st.rerun()
 
     if st.session_state[key]:
-        components.html(html_completo, height=860, scrolling=False)
+        import base64 as _b64
+        html_b64 = _b64.b64encode(html_completo.encode('utf-8')).decode('utf-8')
+        iframe_wrapper = f"""
+<iframe
+  src="data:text/html;base64,{html_b64}"
+  width="100%"
+  height="860px"
+  style="border:none;border-radius:12px;display:block;"
+  allowfullscreen
+></iframe>"""
+        components.html(iframe_wrapper, height=875, scrolling=False)
         st.markdown("""
 <script>
 window.addEventListener('message', function(e) {
