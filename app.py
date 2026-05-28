@@ -584,6 +584,7 @@ document.addEventListener('keydown',function(e){{
 </body>
 </html>"""
     html_completo = (html_completo
+        .replace("{{", "{").replace("}}", "}")
         .replace("__SLIDES_JS__", slides_js)
         .replace("__LOGO_IZQ__", logo_izq_tag)
         .replace("__LOGO_DER__", logo_der_tag)
@@ -601,31 +602,15 @@ document.addEventListener('keydown',function(e){{
         st.rerun()
 
     if st.session_state[key]:
-        import base64 as _b64
-        html_b64 = _b64.b64encode(html_completo.encode('utf-8')).decode('utf-8')
-        iframe_wrapper = f"""
-<iframe
-  src="data:text/html;base64,{html_b64}"
-  width="100%"
-  height="860px"
-  style="border:none;border-radius:12px;display:block;"
-  allowfullscreen
-></iframe>"""
-        components.html(iframe_wrapper, height=875, scrolling=False)
-        st.markdown("""
-<script>
-window.addEventListener('message', function(e) {
-  if (e.data && e.data.type === 'requestFullscreen') {
-    var iframes = document.querySelectorAll('iframe');
-    var target = iframes[iframes.length-2];
-    if (target) {
-      target.setAttribute('allowfullscreen','');
-      (target.requestFullscreen||target.webkitRequestFullscreen||function(){}).call(target);
-    }
-  }
-});
-</script>
-""", unsafe_allow_html=True)
+        # Guardar HTML en archivo temporal y servirlo via components
+        import tempfile, os
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.html', mode='w', encoding='utf-8')
+        tmp.write(html_completo)
+        tmp.close()
+        with open(tmp.name, 'r', encoding='utf-8') as f:
+            html_final = f.read()
+        os.unlink(tmp.name)
+        components.html(html_final, height=860, scrolling=False)
 
 
 def _render_top10(df, n=10):
