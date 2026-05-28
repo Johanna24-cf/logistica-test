@@ -823,7 +823,7 @@ def update_consolidado_arribo(doc, fecha):
                     es_ap = any("APERTURA" in str(row[headers.index(f"X{j}")]).upper()
                                 for j in range(1, 10) if f"X{j}" in headers)
                     proc = "APERTURA" if es_ap else "POR DISTRIBUIR"
-                col_hora_fech_idx = headers.index("HORA FECH") if "HORA FECH" in headers else 0
+                col_hora_fech_idx = headers.index("ETA") if "ETA" in headers else 0
                 bulk_data.append([
                     row[headers.index("ID_DESPACHO")] if "ID_DESPACHO" in headers else row[0],
                     row[col_doc], row[headers.index("ASN")], tienda,
@@ -875,7 +875,7 @@ if menu == "📦 Importaciones":
 
         st.markdown('<div class="titulo-seccion">STATUS GLOBAL</div>', unsafe_allow_html=True)
         if not df_import.empty:
-            columnas_import_req = ["NOMBRE CORREO", "HORA FECH", "STATUS", "FCH LLEGADA"]
+            columnas_import_req = ["NOMBRE CORREO", "ETA", "STATUS", "FCH LLEGADA"]
             columnas_faltantes = [c for c in columnas_import_req if c not in df_import.columns]
 
             if columnas_faltantes:
@@ -895,7 +895,7 @@ if menu == "📦 Importaciones":
                     st.write("### ⏳ Pendientes")
                     df_pend = (
                         df_import[df_import["STATUS"] != "ARRIBADO"]
-                        .groupby(["NOMBRE CORREO", "HORA FECH", "STATUS"])
+                        .groupby(["NOMBRE CORREO", "ETA", "STATUS"])
                         .size()
                         .reset_index(name="ASNs")
                     )
@@ -960,13 +960,13 @@ if menu == "📦 Importaciones":
         # SLIDE 2: Status Global — Power BI style
         # ══════════════════════════════════════════════════════
         status_slide = ""
-        if not df_import.empty and all(c in df_import.columns for c in ["NOMBRE CORREO","STATUS","HORA FECH","FCH LLEGADA"]):
+        if not df_import.empty and all(c in df_import.columns for c in ["NOMBRE CORREO","STATUS","ETA","FCH LLEGADA"]):
             total_i = df_import["NOMBRE CORREO"].nunique()
             arr_i   = df_import[df_import["STATUS"]=="ARRIBADO"]["NOMBRE CORREO"].nunique()
             trans_i = total_i - arr_i
             pct     = int(arr_i / total_i * 100) if total_i else 0
 
-            df_pend2 = df_import[df_import["STATUS"]!="ARRIBADO"].groupby(["NOMBRE CORREO","HORA FECH","STATUS"]).size().reset_index(name="ASNs")
+            df_pend2 = df_import[df_import["STATUS"]!="ARRIBADO"].groupby(["NOMBRE CORREO","ETA","STATUS"]).size().reset_index(name="ASNs")
             orden_s  = {"ADUANAS":0,"EN TRÁNSITO":1,"EN TRANSITO":1,"ORIGEN":2}
             df_pend2["_o"] = df_pend2["STATUS"].str.upper().str.strip().map(orden_s).fillna(
                 df_pend2["STATUS"].apply(lambda s: 99 if str(s).strip()=="" else 3))
