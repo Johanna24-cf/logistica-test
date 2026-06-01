@@ -787,7 +787,6 @@ df_import, df_recep, df_tiendas = cargar_datos_completos()
 st.title("📦 Gestión de Importaciones")
 menu = st.sidebar.radio("MENÚ PRINCIPAL", [
     "📦 Importaciones",
-    "⚙️ Operaciones",
     "📊 Dash Despachos",
 ])
 
