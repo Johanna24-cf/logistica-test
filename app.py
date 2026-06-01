@@ -1117,38 +1117,50 @@ if menu == "📦 Importaciones":
             """, unsafe_allow_html=True)
             st.markdown("")
 
-            if not df_import.empty and "NOMBRE CORREO" in df_import.columns and "STATUS" in df_import.columns:
-                pendientes_docs = df_import[df_import["STATUS"] != "ARRIBADO"]["NOMBRE CORREO"].unique().tolist()
+            if df_import.empty or "NOMBRE CORREO" not in df_import.columns:
+                st.warning("⚠️ No se pudo cargar el consolidado.")
+            else:
+                # Pendientes = los que NO están en recepción
+                imp_en_recepcion = set()
+                if not df_recep.empty and "IMPORTACION" in df_recep.columns:
+                    imp_en_recepcion = set(df_recep["IMPORTACION"].astype(str).str.strip().str.lower())
 
-                with st.form("form_arribo", clear_on_submit=True):
-                    doc_sel = st.selectbox("📋 Importación", pendientes_docs, key="arr_doc")
+                col_rec2 = next((c for c in df_import.columns if c.upper() == "RECUENTO"), None)
+                df_base2 = df_import[df_import[col_rec2].isin(["1","1.0"])].copy() if col_rec2 else df_import.copy()
 
-                    # Filtrar ASNs del doc seleccionado
-                    if doc_sel and "ASN" in df_import.columns:
-                        asns_doc = df_import[
-                            (df_import["NOMBRE CORREO"] == doc_sel) &
-                            (df_import["STATUS"] != "ARRIBADO")
-                        ]["ASN"].unique().tolist()
+                pendientes_docs = sorted(set(
+                    df_base2[~df_base2["NOMBRE CORREO"].astype(str).str.strip().str.lower().isin(imp_en_recepcion)]
+                    ["NOMBRE CORREO"].astype(str).str.strip().unique()
+                ))
+
+                if not pendientes_docs:
+                    st.success("✅ Todas las importaciones ya tienen arribo registrado.")
+                else:
+                    with st.form("form_arribo", clear_on_submit=True):
+                        doc_sel = st.selectbox("📋 Importación", pendientes_docs)
+
+                        asns_doc = []
+                        if doc_sel and "ASN" in df_import.columns:
+                            asns_doc = sorted(
+                                df_base2[df_base2["NOMBRE CORREO"] == doc_sel]["ASN"]
+                                .astype(str).str.strip().unique().tolist()
+                            )
+
                         opciones_asn = ["TODAS"] + asns_doc
                         asns_sel = st.multiselect(
-                            "📦 ASNs a confirmar",
+                            f"📦 ASNs ({len(asns_doc)} disponibles)",
                             options=opciones_asn,
-                            default=["TODAS"],
-                            key="arr_asns"
+                            default=["TODAS"]
                         )
-                    else:
-                        asns_sel = ["TODAS"]
 
-                    fecha_arr = st.date_input("📅 Fecha de llegada", date.today(), key="arr_fecha")
+                        fecha_arr = st.date_input("📅 Fecha de llegada", date.today())
 
-                    submitted = st.form_submit_button("✅ Registrar Arribo", use_container_width=True)
-                    if submitted:
-                        if update_consolidado_arribo(doc_sel, fecha_arr, asns_sel):
-                            st.toast("¡Arribo registrado correctamente!", icon="✅")
-                            st.cache_data.clear()
-                            st.rerun()
-            else:
-                st.info("No hay importaciones pendientes de arribo.")
+                        submitted = st.form_submit_button("✅ Registrar Arribo", use_container_width=True)
+                        if submitted:
+                            if update_consolidado_arribo(doc_sel, fecha_arr, asns_sel):
+                                st.toast(f"¡Arribo de {doc_sel} registrado!", icon="✅")
+                                st.cache_data.clear()
+                                st.rerun()
 
         # ── CONFIRMAR ALMACENAMIENTO ──────────────────────────────────────
         with col_stk:
@@ -1159,51 +1171,54 @@ if menu == "📦 Importaciones":
                     🏢 Confirmar Ingreso a Stock
                 </div>
                 <div style="color:#636e72;font-size:0.85em;">
-                    Selecciona uno o varios ASNs pendientes de almacenamiento.
+                    Selecciona los ASNs que ingresaron al almacén.
                 </div>
             </div>
             """, unsafe_allow_html=True)
             st.markdown("")
 
-            if not df_recep.empty and "STATUS_REC" in df_recep.columns and "ASN" in df_recep.columns:
-                asns_pend = df_recep[
-                    df_recep["STATUS_REC"].str.upper() == "PENDIENTE"
-                ]["ASN"].unique().tolist()
-
-                with st.form("form_stock", clear_on_submit=True):
-                    opciones_stk = ["TODAS"] + asns_pend
-                    asns_stk = st.multiselect(
-                        "📦 ASNs a confirmar",
-                        options=opciones_stk,
-                        default=["TODAS"] if asns_pend else [],
-                        key="stk_asns"
-                    )
-                    fecha_stk = st.date_input("📅 Fecha de ingreso", date.today(), key="stk_fecha")
-
-                    submitted_stk = st.form_submit_button("🏢 Confirmar Ingreso a Stock", use_container_width=True)
-                    if submitted_stk:
-                        try:
-                            sh_r  = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
-                            w_m   = sh_r.worksheet("MOVIMIENTOS")
-                            lista = asns_pend if "TODAS" in asns_stk else asns_stk
-                            errores = []
-                            for asn in lista:
-                                try:
-                                    cell = w_m.find(str(asn))
-                                    w_m.update_cell(cell.row, 6, "ALMACENADO")
-                                    w_m.update_cell(cell.row, 7, str(fecha_stk))
-                                except Exception:
-                                    errores.append(asn)
-                            if errores:
-                                st.warning(f"No se encontraron: {errores}")
-                            else:
-                                st.toast(f"{len(lista)} ASN(s) confirmados en stock ✅", icon="🏢")
-                            st.cache_data.clear()
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error: {e}")
+            if df_recep.empty or "STATUS_REC" not in df_recep.columns:
+                st.warning("⚠️ No se pudo cargar Recepción Importaciones.")
             else:
-                st.info("No hay ASNs pendientes de almacenamiento.")
+                asns_pend_stk = sorted(
+                    df_recep[df_recep["STATUS_REC"].str.upper().str.strip() == "PENDIENTE"]
+                    ["ASN"].astype(str).str.strip().unique().tolist()
+                )
+
+                if not asns_pend_stk:
+                    st.success("✅ No hay ASNs pendientes de almacenamiento.")
+                else:
+                    with st.form("form_stock", clear_on_submit=True):
+                        opciones_stk = ["TODAS"] + asns_pend_stk
+                        asns_stk = st.multiselect(
+                            f"📦 ASNs pendientes ({len(asns_pend_stk)} disponibles)",
+                            options=opciones_stk,
+                            default=["TODAS"]
+                        )
+                        fecha_stk = st.date_input("📅 Fecha de ingreso", date.today())
+
+                        submitted_stk = st.form_submit_button("🏢 Confirmar Ingreso a Stock", use_container_width=True)
+                        if submitted_stk:
+                            try:
+                                sh_r  = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
+                                w_m   = sh_r.worksheet("MOVIMIENTOS")
+                                lista = asns_pend_stk if "TODAS" in asns_stk else [a for a in asns_stk if a != "TODAS"]
+                                errores = []
+                                for asn in lista:
+                                    try:
+                                        cell = w_m.find(str(asn))
+                                        w_m.update_cell(cell.row, 6, "ALMACENADO")
+                                        w_m.update_cell(cell.row, 7, str(fecha_stk))
+                                    except Exception:
+                                        errores.append(asn)
+                                if errores:
+                                    st.warning(f"No se encontraron: {errores}")
+                                else:
+                                    st.toast(f"{len(lista)} ASN(s) confirmados en stock ✅", icon="🏢")
+                                st.cache_data.clear()
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
 
 # MENÚ DISTRIBUCIÓN oculto (modo pantalla)
 
