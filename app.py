@@ -215,8 +215,12 @@ def cargar_datos_completos():
         except: return pd.DataFrame()
 
     df_import_raw = fetch("Consolidado - Carcasas")
-    if not df_import_raw.empty and "RECUENTO" in df_import_raw.columns:
-        df_import_filtered = df_import_raw[df_import_raw["RECUENTO"].isin(["1", "1.0"])].copy()
+    if not df_import_raw.empty:
+        col_rec = next((c for c in df_import_raw.columns if c.upper() == "RECUENTO"), None)
+        if col_rec:
+            df_import_filtered = df_import_raw[df_import_raw[col_rec].isin(["1", "1.0"])].copy()
+        else:
+            df_import_filtered = df_import_raw
     else:
         df_import_filtered = df_import_raw
     return df_import_filtered, fetch("RECEPCION_IMPORTACIONES", "MOVIMIENTOS"), fetch("TIENDAS CARCASAS")
@@ -814,50 +818,68 @@ if menu == "📦 Importaciones":
 
         st.markdown('<div class="titulo-seccion">STATUS GLOBAL</div>', unsafe_allow_html=True)
 
-        # ── Pendientes: Consolidado donde STATUS != ARRIBADO ─────────────
-        # ── Arribados:  RECEPCION_IMPORTACIONES (ya tienen FCH LLEGADA) ──
         df_pend = pd.DataFrame()
         df_arr  = pd.DataFrame()
 
-        if not df_import.empty and "NOMBRE CORREO" in df_import.columns and "STATUS" in df_import.columns:
-            # Pendientes: del consolidado, agrupados por importación y status
-            _pend_raw = df_import[df_import["STATUS"].str.upper().str.strip() != "ARRIBADO"].copy()
+        # Importaciones ya en recepción (columna IMPORTACION)
+        importaciones_recibidas = set()
+        if not df_recep.empty and "IMPORTACION" in df_recep.columns:
+            importaciones_recibidas = set(
+                df_recep["IMPORTACION"].astype(str).str.strip().str.lower().unique()
+            )
+
+        if not df_import.empty and "NOMBRE CORREO" in df_import.columns:
+            # Filtrar Recuento = 1 (columna puede ser RECUENTO o Recuento)
+            col_rec = next((c for c in df_import.columns if c.upper() == "RECUENTO"), None)
+            df_base = df_import[df_import[col_rec].isin(["1", "1.0"])].copy() if col_rec else df_import.copy()
+
+            # Pendientes = en consolidado y NO en recepción
+            mask_pend = ~df_base["NOMBRE CORREO"].astype(str).str.strip().str.lower().isin(importaciones_recibidas)
+            _pend_raw = df_base[mask_pend].copy()
+
             if not _pend_raw.empty:
-                cols_pend = ["NOMBRE CORREO", "STATUS"]
+                cols_grp = ["NOMBRE CORREO", "STATUS"]
                 if "HORA FECH" in _pend_raw.columns:
-                    cols_pend.append("HORA FECH")
+                    cols_grp.append("HORA FECH")
+                agg_col = "ASN" if "ASN" in _pend_raw.columns else "NOMBRE CORREO"
                 df_pend = (
-                    _pend_raw.groupby(cols_pend)["ASN"].nunique()
+                    _pend_raw.groupby(cols_grp)[agg_col].nunique()
                     .reset_index()
-                    .rename(columns={"ASN": "ASNs", "NOMBRE CORREO": "Importación", "STATUS": "Estado", "HORA FECH": "Fecha ETD"})
+                    .rename(columns={
+                        agg_col: "ASNs",
+                        "NOMBRE CORREO": "Importación",
+                        "STATUS": "Estado",
+                        "HORA FECH": "Fecha ETD"
+                    })
                 )
-                orden_map = {"ADUANAS": 0, "EN TRÁNSITO": 1, "EN TRANSITO": 1, "ORIGEN": 2}
-                df_pend["_ord"] = df_pend["Estado"].str.upper().str.strip().map(orden_map).fillna(
-                    df_pend["Estado"].apply(lambda s: 99 if str(s).strip() == "" else 3))
+                orden_map = {"ADUANAS": 0, "EN TRÁNSITO": 1, "EN TRANSITO": 1, "ORIGEN": 2, "SUPPLY": 3}
+                df_pend["_ord"] = df_pend["Estado"].str.upper().str.strip().map(orden_map).fillna(4)
                 df_pend = df_pend.sort_values("_ord").drop(columns=["_ord"]).reset_index(drop=True)
 
+        # Arribados = de recepción, agrupados por importación + fecha llegada
         if not df_recep.empty and "IMPORTACION" in df_recep.columns:
-            # Arribados: de RECEPCION_IMPORTACIONES, con fecha de llegada
-            cols_arr = ["IMPORTACION"]
-            if "FCH LLEGADA" in df_recep.columns:
-                cols_arr.append("FCH LLEGADA")
-            elif "FECHA LLEGADA" in df_recep.columns:
-                cols_arr.append("FECHA LLEGADA")
+            col_fch = "FCH LLEGADA" if "FCH LLEGADA" in df_recep.columns else None
+            cols_arr = ["IMPORTACION"] + ([col_fch] if col_fch else [])
+            agg_col2 = "ASN" if "ASN" in df_recep.columns else "IMPORTACION"
             df_arr = (
-                df_recep.groupby(cols_arr)["ASN"].nunique()
+                df_recep.groupby(cols_arr)[agg_col2].nunique()
                 .reset_index()
-                .rename(columns={"ASN": "ASNs", "IMPORTACION": "Importación",
-                                 "FCH LLEGADA": "Fecha Llegada", "FECHA LLEGADA": "Fecha Llegada"})
+                .rename(columns={
+                    "IMPORTACION": "Importación",
+                    agg_col2: "ASNs",
+                    col_fch: "Fecha Llegada"
+                })
             )
+            df_arr = df_arr[df_arr["Importación"].str.strip() != ""].reset_index(drop=True)
             if "Fecha Llegada" in df_arr.columns:
                 df_arr["_fch"] = pd.to_datetime(df_arr["Fecha Llegada"], errors="coerce")
                 df_arr = df_arr.sort_values("_fch", ascending=False, na_position="last").drop(columns=["_fch"])
             df_arr = df_arr.reset_index(drop=True)
 
         # Métricas
-        total_docs  = df_import["NOMBRE CORREO"].nunique() if not df_import.empty and "NOMBRE CORREO" in df_import.columns else 0
-        n_pend      = df_pend["Importación"].nunique() if not df_pend.empty else 0
-        n_arr       = df_arr["Importación"].nunique()  if not df_arr.empty  else 0
+        total_docs = df_import["NOMBRE CORREO"].nunique() if not df_import.empty and "NOMBRE CORREO" in df_import.columns else 0
+        n_pend = df_pend["Importación"].nunique() if not df_pend.empty else 0
+        n_arr  = df_arr["Importación"].nunique()  if not df_arr.empty  else 0
 
         m1, m2, m3 = st.columns(3)
         m1.metric("📋 Total Importaciones", total_docs)
@@ -869,15 +891,15 @@ if menu == "📦 Importaciones":
 
         with c1:
             st.markdown("### ⏳ Pendientes de Arribo")
-            st.caption("Fuente: Consolidado Carcasas — STATUS ≠ ARRIBADO")
+            st.caption("En consolidado y sin registro en Recepción aún")
             if not df_pend.empty:
                 st.dataframe(df_pend, use_container_width=True, hide_index=True)
             else:
-                st.success("✅ No hay importaciones pendientes de arribo.")
+                st.success("✅ No hay importaciones pendientes.")
 
         with c2:
             st.markdown("### ✅ Arribados")
-            st.caption("Fuente: Recepción Importaciones — con fecha de llegada")
+            st.caption("Con registro en Recepción Importaciones")
             if not df_arr.empty:
                 st.dataframe(df_arr, use_container_width=True, hide_index=True)
             else:
