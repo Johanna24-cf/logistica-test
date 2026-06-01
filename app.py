@@ -343,112 +343,101 @@ def _logos_b64():
 
 
 
+
 def mostrar_seccion_ppt(titulo_seccion, slides):
     import plotly.io as pio
     import streamlit.components.v1 as components
+    import json as _json, re as _re, tempfile, os
 
     slides = [(t, f) for t, f in slides if f is not None]
     if not slides:
         return
 
-    logo_izq, logo_der = _logos_b64()
-    import re as _re2
-    sid = "s" + _re2.sub(r'[^a-zA-Z0-9]', '_', titulo_seccion)[:20]
-    logo_izq_tag = f'<img src="{logo_izq}" style="max-height:56px;max-width:180px;object-fit:contain;">' if logo_izq else ""
-    logo_der_tag = f'<img src="{logo_der}" style="max-height:56px;max-width:180px;object-fit:contain;">' if logo_der else ""
+    key_show = "ppt_" + _re.sub(r"[^a-z0-9]", "_", titulo_seccion.lower())[:25]
+    key_html = key_show + "_html"
 
-    slides_js_parts = []
-    import json as _json
-    for t, f in slides:
-        if isinstance(f, str):
-            slides_js_parts.append('{"titulo":' + _json.dumps(t) + ',"tipo":"html","content":' + _json.dumps(f) + '}')
-        else:
-            fig_json = pio.to_json(f)
-            slides_js_parts.append('{"titulo":' + _json.dumps(t) + ',"tipo":"plotly","fig":' + fig_json + '}')
-    slides_js = "[" + ",".join(slides_js_parts) + "]"
+    # Construir HTML solo cuando se abre (no en cada rerun)
+    if key_show not in st.session_state:
+        st.session_state[key_show] = False
 
-    html_completo = """<!DOCTYPE html>
+    # Botón toggle
+    label = "⬇️ Cerrar" if st.session_state[key_show] else "🖥️ Ver presentación"
+    if st.button(f"{label}: {titulo_seccion}", key=f"btn_{key_show}"):
+        st.session_state[key_show] = not st.session_state[key_show]
+        if st.session_state[key_show]:
+            # Construir HTML al abrir
+            logo_izq, logo_der = _logos_b64()
+            sid = _re.sub(r"[^a-z0-9]", "_", titulo_seccion.lower())[:15]
+            logo_izq_tag = f'<img src="{logo_izq}" style="max-height:56px;max-width:180px;object-fit:contain;">' if logo_izq else ""
+            logo_der_tag = f'<img src="{logo_der}" style="max-height:56px;max-width:180px;object-fit:contain;">' if logo_der else ""
+
+            parts = []
+            for t, f in slides:
+                if isinstance(f, str):
+                    parts.append('{"titulo":' + _json.dumps(t) + ',"tipo":"html","content":' + _json.dumps(f) + '}')
+                else:
+                    parts.append('{"titulo":' + _json.dumps(t) + ',"tipo":"plotly","fig":' + pio.to_json(f) + '}')
+            slides_js = "[" + ",".join(parts) + "]"
+
+            # Leer template y reemplazar
+            tmpl = open(__file__).read()
+            # El template está embebido como string en la función _ppt_template()
+            html = _ppt_template()
+            html = (html
+                .replace("__SLIDES_JS__", slides_js)
+                .replace("__LOGO_IZQ__", logo_izq_tag)
+                .replace("__LOGO_DER__", logo_der_tag)
+            )
+            st.session_state[key_html] = html
+        st.rerun()
+
+    if st.session_state.get(key_show) and key_html in st.session_state:
+        components.html(st.session_state[key_html], height=860, scrolling=False)
+
+
+def _ppt_template():
+    """Retorna el HTML template del PPT como string puro (sin f-string)."""
+    return """<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 <style>
-  * {{ box-sizing:border-box; margin:0; padding:0; }}
-  html, body {{ width:100%; height:100%; background:#f0faf4; font-family:Arial,sans-serif; overflow:hidden; }}
-  #wrap {{
-    width:100%; height:100vh; display:flex; flex-direction:column;
-    padding:10px 20px 10px; gap:8px;
-  }}
-  /* HEADER */
-  #hdr {{
-    display:flex; align-items:center; justify-content:space-between;
-    background:#fff; border-radius:12px;
-    border:2px solid #2d9e6b;
-    padding:8px 20px; flex-shrink:0;
-  }}
-  .logo-w {{ width:190px; display:flex; align-items:center; }}
-  .logo-w.r {{ justify-content:flex-end; }}
-  #titulo {{
-    color:#1a7a4a; font-size:1.5rem; font-weight:800;
-    text-align:center; flex:1; padding:0 10px;
-  }}
-  /* PROGRESO */
-  #pw {{ width:100%; height:5px; background:#c8e06a; border-radius:3px; flex-shrink:0; }}
-  #pb {{ height:5px; background:#1a7a4a; border-radius:3px; width:0%; transition:width 0.05s linear; }}
-  /* CUERPO con marco */
-  #body {{
-    flex:1; min-height:0;
-    border:3px solid #2d9e6b; border-radius:14px;
-    background:#fff; overflow:hidden;
-    display:flex; align-items:stretch;
-  }}
-  #plt-div {{ width:100%; height:100%; }}
-  #html-div {{ width:100%; height:100%; overflow-y:auto; overflow-x:hidden; display:none; }}
-  /* FOOTER */
-  #footer {{
-    display:flex; align-items:center; justify-content:space-between;
-    background:#fff; border-radius:12px;
-    border:2px solid #c8e06a;
-    padding:6px 16px; flex-shrink:0;
-  }}
-  #dots {{ display:flex; gap:8px; align-items:center; }}
-  #dots span {{
-    width:10px; height:10px; border-radius:50%;
-    display:inline-block; cursor:pointer;
-    background:#c8e06a; border:2px solid #2d9e6b;
-    transition:all 0.25s;
-  }}
-  #dots span.on {{ background:#1a7a4a; transform:scale(1.35); }}
-  #ctr {{ color:#636e72; font-size:12px; font-weight:700; }}
-  #nav {{ display:flex; gap:8px; }}
-  #nav button {{
-    background:#fff; border:2px solid #2d9e6b; color:#2d9e6b;
-    border-radius:6px; padding:4px 14px; font-size:13px;
-    font-weight:700; cursor:pointer; transition:all 0.2s;
-  }}
-  #nav button:hover {{ background:#2d9e6b; color:#fff; }}
-  #fsb {{
-    background:linear-gradient(135deg,#2d9e6b,#c8e06a) !important;
-    color:#0d1f16 !important; border:none !important;
-  }}
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { width:100%; height:100%; background:#f0faf4; font-family:Arial,sans-serif; overflow:hidden; }
+  #wrap { width:100%; height:100vh; display:flex; flex-direction:column; padding:10px 20px 10px; gap:8px; }
+  #hdr { display:flex; align-items:center; justify-content:space-between; background:#fff; border-radius:12px; border:2px solid #2d9e6b; padding:8px 20px; flex-shrink:0; }
+  .logo-w { width:190px; display:flex; align-items:center; }
+  .logo-w.r { justify-content:flex-end; }
+  #titulo { color:#1a7a4a; font-size:1.5rem; font-weight:800; text-align:center; flex:1; padding:0 10px; }
+  #pw { width:100%; height:5px; background:#c8e06a; border-radius:3px; flex-shrink:0; }
+  #pb { height:5px; background:#1a7a4a; border-radius:3px; width:0%; }
+  #body { flex:1; min-height:0; border:3px solid #2d9e6b; border-radius:14px; background:#fff; overflow:hidden; display:flex; align-items:stretch; }
+  #plt-div { width:100%; height:100%; }
+  #html-div { width:100%; height:100%; overflow-y:auto; overflow-x:hidden; display:none; }
+  #footer { display:flex; align-items:center; justify-content:space-between; background:#fff; border-radius:12px; border:2px solid #c8e06a; padding:6px 16px; flex-shrink:0; }
+  #dots { display:flex; gap:8px; align-items:center; }
+  #dots span { width:10px; height:10px; border-radius:50%; display:inline-block; cursor:pointer; background:#c8e06a; border:2px solid #2d9e6b; transition:all 0.25s; }
+  #dots span.on { background:#1a7a4a; transform:scale(1.35); }
+  #ctr { color:#636e72; font-size:12px; font-weight:700; }
+  #nav { display:flex; gap:8px; }
+  #nav button { background:#fff; border:2px solid #2d9e6b; color:#2d9e6b; border-radius:6px; padding:4px 14px; font-size:13px; font-weight:700; cursor:pointer; }
+  #nav button:hover { background:#2d9e6b; color:#fff; }
+  #fsb { background:linear-gradient(135deg,#2d9e6b,#c8e06a) !important; color:#0d1f16 !important; border:none !important; }
 </style>
 </head>
 <body>
 <div id="wrap">
-
   <div id="hdr">
     <div class="logo-w">__LOGO_IZQ__</div>
     <div id="titulo"></div>
     <div class="logo-w r">__LOGO_DER__</div>
   </div>
-
   <div id="pw"><div id="pb"></div></div>
-
   <div id="body">
     <div id="plt-div"></div>
     <div id="html-div"></div>
   </div>
-
   <div id="footer">
     <div id="dots"></div>
     <div id="ctr"></div>
@@ -458,160 +447,96 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
       <button id="fsb" onclick="toggleFS()">&#x26F6; Fullscreen</button>
     </div>
   </div>
-
 </div>
 <script>
 var SLIDES=__SLIDES_JS__, N=SLIDES.length, idx=0, tmr=null, ptmr=null, DL=5000;
+var isHeatmap=false, isScatter=false;
 
-function goTo(i) {{
+function goTo(i) {
   idx=i;
-  document.getElementById('titulo').textContent = SLIDES[i].titulo;
-  document.getElementById('ctr').textContent = (i+1)+' / '+N;
-
-  var plt = document.getElementById('plt-div');
-  var htm = document.getElementById('html-div');
-  var body = document.getElementById('body');
-
-  if (SLIDES[i].tipo==='plotly') {{
+  document.getElementById('titulo').textContent=SLIDES[i].titulo;
+  document.getElementById('ctr').textContent=(i+1)+' / '+N;
+  var plt=document.getElementById('plt-div');
+  var htm=document.getElementById('html-div');
+  var body=document.getElementById('body');
+  if (SLIDES[i].tipo==='plotly') {
     plt.style.display='block'; htm.style.display='none';
+    isHeatmap = SLIDES[i].fig.data && SLIDES[i].fig.data[0] && SLIDES[i].fig.data[0].type==='heatmap';
+    isScatter  = SLIDES[i].fig.data && SLIDES[i].fig.data[0] && SLIDES[i].fig.data[0].type==='scatter';
     var W=body.clientWidth-6, H=body.clientHeight-6;
-    var base=SLIDES[i].fig.layout||{{}};
-    // Detectar si es heatmap (imshow tiene 'heatmap' en el tipo)
-    var isHeatmap = SLIDES[i].fig.data && SLIDES[i].fig.data[0] && SLIDES[i].fig.data[0].type==='heatmap';
-    var isScatter = SLIDES[i].fig.data && SLIDES[i].fig.data[0] && SLIDES[i].fig.data[0].type==='scatter';
-    var mg = isHeatmap
-      ? {{l:160, r:20,  t:50, b:20}}
-      : (isScatter
-        ? {{l:20,  r:20,  t:60, b:60}}   // evolutivo: sin eje Y, labels sobre puntos
-        : {{l:160, r:100, t:30, b:40}}); // bar/top10: eje Y visible, margen derecho para labels
-    // Ajustar datos según tipo
-    var figData = SLIDES[i].fig.data.map(function(trace) {{
-      if (isScatter) {{
-        // Evolutivo: labels sobre puntos, sin eje Y
-        var t = Object.assign({{}}, trace);
-        if (t.mode && t.mode.indexOf('text') === -1) t.mode = t.mode + '+text';
-        if (!t.mode) t.mode = 'lines+markers+text';
-        if (t.y && t.y.length) {{
-          t.text = t.y.map(function(v) {{
-            return typeof v === 'number' ? v.toLocaleString('es-PE') : (v||'');
-          }});
-        }}
-        t.textposition = 'top center';
-        t.textfont = {{size: 13, color: '#1a7a4a', family: 'Arial'}};
+    var base=SLIDES[i].fig.layout||{};
+    var mg = isHeatmap ? {l:160,r:20,t:50,b:20} : (isScatter ? {l:20,r:20,t:60,b:60} : {l:160,r:100,t:30,b:40});
+    var figData = SLIDES[i].fig.data.map(function(trace) {
+      if (isScatter) {
+        var t=Object.assign({},trace);
+        if (t.mode && t.mode.indexOf('text')===-1) t.mode=t.mode+'+text';
+        if (!t.mode) t.mode='lines+markers+text';
+        if (t.y && t.y.length) t.text=t.y.map(function(v){ return typeof v==='number' ? v.toLocaleString('es-PE') : (v||''); });
+        t.textposition='top center';
+        t.textfont={size:13,color:'#1a7a4a',family:'Arial'};
         return t;
-      }}
-      return trace; // bar y heatmap: sin cambios
-    }});
-    var lay=Object.assign({{}},base,{{
-      autosize:false, width:W, height:H,
-      paper_bgcolor:'#ffffff', plot_bgcolor:'#ffffff',
-      margin: mg,
-      font:{{family:'Arial',size:13}},
-      yaxis: isHeatmap
-        ? Object.assign({{}}, base.yaxis||{{}}, {{title:'', tickfont:{{size:11.5}}}})
-        : (isScatter
-          ? Object.assign({{}}, base.yaxis||{{}}, {{visible:false, showticklabels:false, showgrid:false, zeroline:false}})
-          : (base.yaxis||{{}})),
-      xaxis: isHeatmap
-        ? Object.assign({{}}, base.xaxis||{{}}, {{title:'', tickfont:{{size:13}}, side:'top'}})
-        : Object.assign({{}}, base.xaxis||{{}}, {{tickfont:{{size:13}}, showgrid:false}})
-    }});
-    Plotly.react('plt-div', isHeatmap ? SLIDES[i].fig.data : figData, lay, {{displayModeBar:false,responsive:false}});
-  }} else {{
+      }
+      return trace;
+    });
+    var lay=Object.assign({},base,{
+      autosize:false,width:W,height:H,
+      paper_bgcolor:'#ffffff',plot_bgcolor:'#ffffff',
+      margin:mg,font:{family:'Arial',size:13},
+      yaxis: isHeatmap ? Object.assign({},base.yaxis||{},{title:'',tickfont:{size:11.5}})
+           : (isScatter ? Object.assign({},base.yaxis||{},{visible:false,showticklabels:false,showgrid:false,zeroline:false})
+           : (base.yaxis||{})),
+      xaxis: isHeatmap ? Object.assign({},base.xaxis||{},{title:'',tickfont:{size:13},side:'top'})
+           : Object.assign({},base.xaxis||{},{tickfont:{size:13},showgrid:false})
+    });
+    Plotly.react('plt-div', figData, lay, {displayModeBar:false,responsive:false});
+  } else {
     plt.style.display='none'; htm.style.display='block';
     htm.innerHTML=SLIDES[i].content;
-  }}
-
-  document.querySelectorAll('#dots span').forEach(function(d,j){{
-    d.className=j===i?'on':'';
-  }});
-
+  }
+  document.querySelectorAll('#dots span').forEach(function(d,j){ d.className=j===i?'on':''; });
   clearInterval(ptmr);
-  var pb=document.getElementById('pb'), t0=Date.now();
+  var pb=document.getElementById('pb'),t0=Date.now();
   pb.style.width='0%';
-  ptmr=setInterval(function(){{
-    pb.style.width=Math.min(100,(Date.now()-t0)/DL*100)+'%';
-  }},50);
-}}
+  ptmr=setInterval(function(){ pb.style.width=Math.min(100,(Date.now()-t0)/DL*100)+'%'; },50);
+}
 
-function next(){{goTo((idx+1)%N);}}
-function mNext(){{clearInterval(tmr);next();tmr=setInterval(next,DL);}}
-function mPrev(){{clearInterval(tmr);goTo((idx-1+N)%N);tmr=setInterval(next,DL);}}
+function next(){ goTo((idx+1)%N); }
+function mNext(){ clearInterval(tmr); next(); tmr=setInterval(next,DL); }
+function mPrev(){ clearInterval(tmr); goTo((idx-1+N)%N); tmr=setInterval(next,DL); }
 
-function toggleFS(){{
+function toggleFS() {
   var el=document.documentElement;
-  var isFS=document.fullscreenElement||document.webkitFullscreenElement;
-  if(isFS){{
-    (document.exitFullscreen||document.webkitExitFullscreen||function(){{}}).call(document);
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
     document.getElementById('fsb').textContent='⛶ Fullscreen';
-  }} else {{
-    if(el.requestFullscreen){{
-      el.requestFullscreen().then(function(){{
-        document.getElementById('fsb').textContent='⊠ Salir';
-        setTimeout(function(){{goTo(idx);}},300);
-      }}).catch(function(){{
-        window.parent.postMessage({{type:'requestFullscreen'}},'*');
-      }});
-    }} else {{
-      window.parent.postMessage({{type:'requestFullscreen'}},'*');
-    }}
-  }}
-}}
+  } else {
+    el.requestFullscreen && el.requestFullscreen().then(function(){
+      document.getElementById('fsb').textContent='⊠ Salir';
+      setTimeout(function(){ goTo(idx); },300);
+    });
+  }
+}
 
-window.addEventListener('resize',function(){{
-  clearTimeout(window._rt);
-  window._rt=setTimeout(function(){{goTo(idx);}},200);
-}});
-
-document.addEventListener('keydown',function(e){{
+window.addEventListener('resize',function(){ clearTimeout(window._rt); window._rt=setTimeout(function(){ goTo(idx); },200); });
+document.addEventListener('keydown',function(e){
   if(e.key==='ArrowRight') mNext();
   if(e.key==='ArrowLeft')  mPrev();
   if(e.key==='f'||e.key==='F') toggleFS();
-}});
+});
 
-// Construir dots y arrancar
-(function(){{
+(function(){
   var dts=document.getElementById('dots');
-  SLIDES.forEach(function(_,j){{
+  SLIDES.forEach(function(_,j){
     var d=document.createElement('span');
-    d.onclick=function(){{clearInterval(tmr);goTo(j);tmr=setInterval(next,DL);}};
+    d.onclick=function(){ clearInterval(tmr); goTo(j); tmr=setInterval(next,DL); };
     dts.appendChild(d);
-  }});
+  });
   goTo(0);
   tmr=setInterval(next,DL);
-}})();
+})();
 </script>
 </body>
 </html>"""
-    html_completo = (html_completo
-        .replace("{{", "{").replace("}}", "}")
-        .replace("__SLIDES_JS__", slides_js)
-        .replace("__LOGO_IZQ__", logo_izq_tag)
-        .replace("__LOGO_DER__", logo_der_tag)
-    )
-
-    # Key estable: limpiar título a solo alfanumérico
-    import re as _re
-    key = "ppt_" + _re.sub(r'[^a-zA-Z0-9]', '_', titulo_seccion)[:30]
-    if key not in st.session_state:
-        st.session_state[key] = False
-
-    label = "⬇️ Cerrar presentación" if st.session_state[key] else "🖥️ Ver presentación"
-    if st.button(f"{label}: {titulo_seccion}", key=f"btn_{key}"):
-        st.session_state[key] = not st.session_state[key]
-        st.rerun()
-
-    if st.session_state[key]:
-        # Guardar HTML en archivo temporal y servirlo via components
-        import tempfile, os
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.html', mode='w', encoding='utf-8')
-        tmp.write(html_completo)
-        tmp.close()
-        with open(tmp.name, 'r', encoding='utf-8') as f:
-            html_final = f.read()
-        os.unlink(tmp.name)
-        components.html(html_final, height=860, scrolling=False)
-
 
 def _render_top10(df, n=10):
     st.markdown('<div class="titulo-seccion">🏆 Top SKUs despachados</div>', unsafe_allow_html=True)
@@ -785,37 +710,42 @@ def render_dash_despachos():
 # 4. FUNCIONES DE PROCESAMIENTO
 # =========================================================
 
-def update_consolidado_arribo(doc, fecha):
+def update_consolidado_arribo(doc, fecha, asns_sel=None):
+    """
+    Solo escribe en RECEPCION_IMPORTACIONES → MOVIMIENTOS.
+    No modifica el Consolidado - Carcasas.
+    asns_sel: lista de ASNs a confirmar, o ["TODAS"] / None para confirmar todos.
+    """
     try:
         sh_cons = abrir_archivo_dinamico("Consolidado - Carcasas")
         wks_cons = sh_cons.sheet1
         all_data = wks_cons.get_all_values()
         headers = [h.upper() for h in all_data[0]]
 
-        col_doc    = headers.index("NOMBRE CORREO")
-        col_status = headers.index("STATUS")
-        col_fecha  = headers.index("FCH LLEGADA")
+        col_doc      = headers.index("NOMBRE CORREO")
         col_recuento = headers.index("RECUENTO") if "RECUENTO" in headers else None
+        col_asn      = headers.index("ASN") if "ASN" in headers else None
 
-        cells_to_update = []
+        filtrar_asn = (asns_sel and "TODAS" not in asns_sel)
+
         filas_para_traspaso = []
 
         for i, row in enumerate(all_data[1:], start=2):
             if row[col_doc] == str(doc):
                 if col_recuento is not None and str(row[col_recuento]).strip() not in ["1", "1.0"]:
                     continue
-                cells_to_update.append(gspread.Cell(i, col_status + 1, "ARRIBADO"))
-                cells_to_update.append(gspread.Cell(i, col_fecha + 1, str(fecha)))
+                if filtrar_asn and col_asn is not None:
+                    if str(row[col_asn]).strip() not in [str(a) for a in asns_sel]:
+                        continue
                 filas_para_traspaso.append(row)
 
-        if cells_to_update:
-            wks_cons.update_cells(cells_to_update)
+        if filas_para_traspaso:
             sh_rec  = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
             wks_mov = sh_rec.worksheet("MOVIMIENTOS")
 
             bulk_data = []
             for row in filas_para_traspaso:
-                tienda = row[headers.index("TIENDA")].strip()
+                tienda = row[headers.index("TIENDA")].strip() if "TIENDA" in headers else ""
                 if tienda == "4298":
                     dest, proc = "ALMACENAJE", "POR ALMACENAR"
                 else:
@@ -823,17 +753,25 @@ def update_consolidado_arribo(doc, fecha):
                     es_ap = any("APERTURA" in str(row[headers.index(f"X{j}")]).upper()
                                 for j in range(1, 10) if f"X{j}" in headers)
                     proc = "APERTURA" if es_ap else "POR DISTRIBUIR"
-                col_hora_fech_idx = headers.index("ETA") if "ETA" in headers else 0
+
+                col_hora_fech_idx = headers.index("HORA FECH") if "HORA FECH" in headers else 0
                 bulk_data.append([
                     row[headers.index("ID_DESPACHO")] if "ID_DESPACHO" in headers else row[0],
-                    row[col_doc], row[headers.index("ASN")], tienda,
-                    row[headers.index("CANTIDAD")], "Pendiente", str(fecha),
-                    row[col_hora_fech_idx], dest, proc, ""
+                    row[col_doc],
+                    row[headers.index("ASN")] if "ASN" in headers else "",
+                    tienda,
+                    row[headers.index("CANTIDAD")] if "CANTIDAD" in headers else "",
+                    "Pendiente",
+                    str(fecha),
+                    row[col_hora_fech_idx],
+                    dest, proc, ""
                 ])
             wks_mov.append_rows(bulk_data)
             return True
+        return False
     except Exception as e:
-        st.error(f"Error técnico: {e}"); return False
+        st.error(f"Error técnico: {e}")
+        return False
 
 
 # =========================================================
@@ -845,6 +783,7 @@ df_import, df_recep, df_tiendas = cargar_datos_completos()
 st.title("📦 Gestión de Importaciones")
 menu = st.sidebar.radio("MENÚ PRINCIPAL", [
     "📦 Importaciones",
+    "⚙️ Operaciones",
     "📊 Dash Despachos",
 ])
 
@@ -852,7 +791,7 @@ menu = st.sidebar.radio("MENÚ PRINCIPAL", [
 # MENÚ: IMPORTACIONES
 # ----------------------------------------------------------
 if menu == "📦 Importaciones":
-    (tab_dash,) = st.tabs(["📊 Dash Importacion"])
+    tab_dash, tab_ops = st.tabs(["📊 Dash Importacion", "⚙️ Operaciones"])
 
     with tab_dash:
         st.subheader("🏪 Próximas Aperturas de Tiendas - Perú")
@@ -874,51 +813,75 @@ if menu == "📦 Importaciones":
                 st.warning("⚠️ Columnas faltantes en 'TIENDAS CARCASAS'")
 
         st.markdown('<div class="titulo-seccion">STATUS GLOBAL</div>', unsafe_allow_html=True)
-        if not df_import.empty:
-            columnas_import_req = ["NOMBRE CORREO", "ETA", "STATUS", "FCH LLEGADA"]
-            columnas_faltantes = [c for c in columnas_import_req if c not in df_import.columns]
 
-            if columnas_faltantes:
-                st.error(f"❌ Columnas faltantes: {', '.join(columnas_faltantes)}")
+        # ── Pendientes: Consolidado donde STATUS != ARRIBADO ─────────────
+        # ── Arribados:  RECEPCION_IMPORTACIONES (ya tienen FCH LLEGADA) ──
+        df_pend = pd.DataFrame()
+        df_arr  = pd.DataFrame()
+
+        if not df_import.empty and "NOMBRE CORREO" in df_import.columns and "STATUS" in df_import.columns:
+            # Pendientes: del consolidado, agrupados por importación y status
+            _pend_raw = df_import[df_import["STATUS"].str.upper().str.strip() != "ARRIBADO"].copy()
+            if not _pend_raw.empty:
+                cols_pend = ["NOMBRE CORREO", "STATUS"]
+                if "HORA FECH" in _pend_raw.columns:
+                    cols_pend.append("HORA FECH")
+                df_pend = (
+                    _pend_raw.groupby(cols_pend)["ASN"].nunique()
+                    .reset_index()
+                    .rename(columns={"ASN": "ASNs", "NOMBRE CORREO": "Importación", "STATUS": "Estado", "HORA FECH": "Fecha ETD"})
+                )
+                orden_map = {"ADUANAS": 0, "EN TRÁNSITO": 1, "EN TRANSITO": 1, "ORIGEN": 2}
+                df_pend["_ord"] = df_pend["Estado"].str.upper().str.strip().map(orden_map).fillna(
+                    df_pend["Estado"].apply(lambda s: 99 if str(s).strip() == "" else 3))
+                df_pend = df_pend.sort_values("_ord").drop(columns=["_ord"]).reset_index(drop=True)
+
+        if not df_recep.empty and "IMPORTACION" in df_recep.columns:
+            # Arribados: de RECEPCION_IMPORTACIONES, con fecha de llegada
+            cols_arr = ["IMPORTACION"]
+            if "FCH LLEGADA" in df_recep.columns:
+                cols_arr.append("FCH LLEGADA")
+            elif "FECHA LLEGADA" in df_recep.columns:
+                cols_arr.append("FECHA LLEGADA")
+            df_arr = (
+                df_recep.groupby(cols_arr)["ASN"].nunique()
+                .reset_index()
+                .rename(columns={"ASN": "ASNs", "IMPORTACION": "Importación",
+                                 "FCH LLEGADA": "Fecha Llegada", "FECHA LLEGADA": "Fecha Llegada"})
+            )
+            if "Fecha Llegada" in df_arr.columns:
+                df_arr["_fch"] = pd.to_datetime(df_arr["Fecha Llegada"], errors="coerce")
+                df_arr = df_arr.sort_values("_fch", ascending=False, na_position="last").drop(columns=["_fch"])
+            df_arr = df_arr.reset_index(drop=True)
+
+        # Métricas
+        total_docs  = df_import["NOMBRE CORREO"].nunique() if not df_import.empty and "NOMBRE CORREO" in df_import.columns else 0
+        n_pend      = df_pend["Importación"].nunique() if not df_pend.empty else 0
+        n_arr       = df_arr["Importación"].nunique()  if not df_arr.empty  else 0
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("📋 Total Importaciones", total_docs)
+        m2.metric("⏳ Pendientes de Arribo", n_pend)
+        m3.metric("✅ Arribados", n_arr)
+
+        st.divider()
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.markdown("### ⏳ Pendientes de Arribo")
+            st.caption("Fuente: Consolidado Carcasas — STATUS ≠ ARRIBADO")
+            if not df_pend.empty:
+                st.dataframe(df_pend, use_container_width=True, hide_index=True)
             else:
-                m1, m2, m3 = st.columns(3)
-                total     = df_import["NOMBRE CORREO"].nunique()
-                arribados = df_import[df_import["STATUS"] == "ARRIBADO"]["NOMBRE CORREO"].nunique()
-                m1.metric("Total Docs", total)
-                m2.metric("Arribados", arribados)
-                m3.metric("En Tránsito", total - arribados)
+                st.success("✅ No hay importaciones pendientes de arribo.")
 
-                st.divider()
-                c1, c2 = st.columns(2)
-
-                with c1:
-                    st.write("### ⏳ Pendientes")
-                    df_pend = (
-                        df_import[df_import["STATUS"] != "ARRIBADO"]
-                        .groupby(["NOMBRE CORREO", "ETA", "STATUS"])
-                        .size()
-                        .reset_index(name="ASNs")
-                    )
-                    orden_status = {"ADUANAS": 0, "EN TRÁNSITO": 1, "EN TRANSITO": 1, "ORIGEN": 2}
-                    df_pend["_orden"] = df_pend["STATUS"].str.upper().str.strip().map(orden_status).fillna(
-                        df_pend["STATUS"].apply(lambda s: 99 if str(s).strip() == "" else 3)
-                    )
-                    df_pend = df_pend.sort_values("_orden").drop(columns=["_orden"])
-                    st.dataframe(df_pend, use_container_width=True, hide_index=True)
-
-                with c2:
-                    st.write("### ✅ Arribados")
-                    df_arr = (
-                        df_import[df_import["STATUS"] == "ARRIBADO"]
-                        .groupby(["NOMBRE CORREO", "FCH LLEGADA"])
-                        .size()
-                        .reset_index(name="ASNs")
-                    )
-                    df_arr["_fch_dt"] = pd.to_datetime(df_arr["FCH LLEGADA"], errors="coerce")
-                    df_arr = df_arr.sort_values("_fch_dt", ascending=False, na_position="last").drop(columns=["_fch_dt"])
-                    st.dataframe(df_arr, use_container_width=True, hide_index=True)
-        else:
-            st.info("ℹ️ No hay registros con RECUENTO = 1, o la hoja está vacía.")
+        with c2:
+            st.markdown("### ✅ Arribados")
+            st.caption("Fuente: Recepción Importaciones — con fecha de llegada")
+            if not df_arr.empty:
+                st.dataframe(df_arr, use_container_width=True, hide_index=True)
+            else:
+                st.info("Sin registros de recepción aún.")
 
         # ── Botón presentación importaciones ───────────────────────────────
         st.divider()
@@ -960,13 +923,13 @@ if menu == "📦 Importaciones":
         # SLIDE 2: Status Global — Power BI style
         # ══════════════════════════════════════════════════════
         status_slide = ""
-        if not df_import.empty and all(c in df_import.columns for c in ["NOMBRE CORREO","STATUS","ETA","FCH LLEGADA"]):
+        if not df_import.empty and all(c in df_import.columns for c in ["NOMBRE CORREO","STATUS","HORA FECH","FCH LLEGADA"]):
             total_i = df_import["NOMBRE CORREO"].nunique()
             arr_i   = df_import[df_import["STATUS"]=="ARRIBADO"]["NOMBRE CORREO"].nunique()
             trans_i = total_i - arr_i
             pct     = int(arr_i / total_i * 100) if total_i else 0
 
-            df_pend2 = df_import[df_import["STATUS"]!="ARRIBADO"].groupby(["NOMBRE CORREO","ETA","STATUS"]).size().reset_index(name="ASNs")
+            df_pend2 = df_import[df_import["STATUS"]!="ARRIBADO"].groupby(["NOMBRE CORREO","HORA FECH","STATUS"]).size().reset_index(name="ASNs")
             orden_s  = {"ADUANAS":0,"EN TRÁNSITO":1,"EN TRANSITO":1,"ORIGEN":2}
             df_pend2["_o"] = df_pend2["STATUS"].str.upper().str.strip().map(orden_s).fillna(
                 df_pend2["STATUS"].apply(lambda s: 99 if str(s).strip()=="" else 3))
@@ -1112,7 +1075,113 @@ if menu == "📦 Importaciones":
 
     # tab_recep oculto (modo pantalla)
 
-    # tab_ops oculto (modo pantalla)
+    with tab_ops:
+        st.markdown('<div class="titulo-seccion">⚙️ Operaciones</div>', unsafe_allow_html=True)
+
+        col_arr, col_stk = st.columns(2)
+
+        # ── CONFIRMAR ARRIBO ──────────────────────────────────────────────
+        with col_arr:
+            st.markdown("""
+            <div style="background:#fff;border-radius:14px;border-top:5px solid #2d9e6b;
+                        padding:20px 22px;box-shadow:0 2px 10px rgba(45,158,107,0.1);">
+                <div style="color:#1a7a4a;font-size:1.1rem;font-weight:700;margin-bottom:4px;">
+                    🚢 Confirmar Arribo de Importación
+                </div>
+                <div style="color:#636e72;font-size:0.85em;">
+                    Selecciona la importación, los ASNs que llegaron y registra la fecha.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown("")
+
+            if not df_import.empty and "NOMBRE CORREO" in df_import.columns and "STATUS" in df_import.columns:
+                pendientes_docs = df_import[df_import["STATUS"] != "ARRIBADO"]["NOMBRE CORREO"].unique().tolist()
+
+                with st.form("form_arribo", clear_on_submit=True):
+                    doc_sel = st.selectbox("📋 Importación", pendientes_docs, key="arr_doc")
+
+                    # Filtrar ASNs del doc seleccionado
+                    if doc_sel and "ASN" in df_import.columns:
+                        asns_doc = df_import[
+                            (df_import["NOMBRE CORREO"] == doc_sel) &
+                            (df_import["STATUS"] != "ARRIBADO")
+                        ]["ASN"].unique().tolist()
+                        opciones_asn = ["TODAS"] + asns_doc
+                        asns_sel = st.multiselect(
+                            "📦 ASNs a confirmar",
+                            options=opciones_asn,
+                            default=["TODAS"],
+                            key="arr_asns"
+                        )
+                    else:
+                        asns_sel = ["TODAS"]
+
+                    fecha_arr = st.date_input("📅 Fecha de llegada", date.today(), key="arr_fecha")
+
+                    submitted = st.form_submit_button("✅ Registrar Arribo", use_container_width=True)
+                    if submitted:
+                        if update_consolidado_arribo(doc_sel, fecha_arr, asns_sel):
+                            st.toast("¡Arribo registrado correctamente!", icon="✅")
+                            st.cache_data.clear()
+                            st.rerun()
+            else:
+                st.info("No hay importaciones pendientes de arribo.")
+
+        # ── CONFIRMAR ALMACENAMIENTO ──────────────────────────────────────
+        with col_stk:
+            st.markdown("""
+            <div style="background:#fff;border-radius:14px;border-top:5px solid #3dbb7e;
+                        padding:20px 22px;box-shadow:0 2px 10px rgba(45,158,107,0.1);">
+                <div style="color:#1a7a4a;font-size:1.1rem;font-weight:700;margin-bottom:4px;">
+                    🏢 Confirmar Ingreso a Stock
+                </div>
+                <div style="color:#636e72;font-size:0.85em;">
+                    Selecciona uno o varios ASNs pendientes de almacenamiento.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown("")
+
+            if not df_recep.empty and "STATUS_REC" in df_recep.columns and "ASN" in df_recep.columns:
+                asns_pend = df_recep[
+                    df_recep["STATUS_REC"].str.upper() == "PENDIENTE"
+                ]["ASN"].unique().tolist()
+
+                with st.form("form_stock", clear_on_submit=True):
+                    opciones_stk = ["TODAS"] + asns_pend
+                    asns_stk = st.multiselect(
+                        "📦 ASNs a confirmar",
+                        options=opciones_stk,
+                        default=["TODAS"] if asns_pend else [],
+                        key="stk_asns"
+                    )
+                    fecha_stk = st.date_input("📅 Fecha de ingreso", date.today(), key="stk_fecha")
+
+                    submitted_stk = st.form_submit_button("🏢 Confirmar Ingreso a Stock", use_container_width=True)
+                    if submitted_stk:
+                        try:
+                            sh_r  = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
+                            w_m   = sh_r.worksheet("MOVIMIENTOS")
+                            lista = asns_pend if "TODAS" in asns_stk else asns_stk
+                            errores = []
+                            for asn in lista:
+                                try:
+                                    cell = w_m.find(str(asn))
+                                    w_m.update_cell(cell.row, 6, "ALMACENADO")
+                                    w_m.update_cell(cell.row, 7, str(fecha_stk))
+                                except Exception:
+                                    errores.append(asn)
+                            if errores:
+                                st.warning(f"No se encontraron: {errores}")
+                            else:
+                                st.toast(f"{len(lista)} ASN(s) confirmados en stock ✅", icon="🏢")
+                            st.cache_data.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+            else:
+                st.info("No hay ASNs pendientes de almacenamiento.")
 
 # MENÚ DISTRIBUCIÓN oculto (modo pantalla)
 
