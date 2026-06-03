@@ -496,16 +496,33 @@ function goTo(i) {
   } else {
     plt.style.display='none'; htm.style.display='block';
     htm.innerHTML=SLIDES[i].content;
-    // innerHTML no ejecuta <script> — reinsertarlos manualmente
-    var scripts = htm.querySelectorAll('script');
-    scripts.forEach(function(oldScript) {
-      var newScript = document.createElement('script');
-      Array.from(oldScript.attributes).forEach(function(attr) {
-        newScript.setAttribute(attr.name, attr.value);
+    // Renderizar divs con data-chart usando Plotly (ya cargado en este documento)
+    setTimeout(function(){
+      htm.querySelectorAll('[data-chart="bar"]').forEach(function(el){
+        var data = JSON.parse(el.getAttribute('data-points') || '[]');
+        var color = el.getAttribute('data-color') || '#1D9E75';
+        if (!data.length) return;
+        var W = el.offsetWidth  || el.parentElement.offsetWidth  - 32 || 400;
+        var H = el.offsetHeight || el.parentElement.offsetHeight - 50 || 260;
+        if (H < 80) H = 260;
+        Plotly.newPlot(el, [{
+          type: 'bar',
+          x: data.map(function(d){ return d.x; }),
+          y: data.map(function(d){ return d.y; }),
+          marker: { color: color, opacity: 0.85 },
+          text: data.map(function(d){ return String(d.y); }),
+          textposition: 'outside', cliponaxis: false,
+          textfont: { size: 12, color: '#1a7a4a' }
+        }], {
+          autosize: false, width: W, height: H,
+          paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff',
+          margin: { l: 40, r: 20, t: 10, b: 70 },
+          font: { family: 'Arial,sans-serif', size: 11 },
+          xaxis: { showgrid: false, tickfont: { size: 10 }, tickangle: -35, automargin: true },
+          yaxis: { gridcolor: '#f0faf4', tickfont: { size: 10 }, zeroline: false }
+        }, { displayModeBar: false, responsive: false });
       });
-      newScript.textContent = oldScript.textContent;
-      oldScript.parentNode.replaceChild(newScript, oldScript);
-    });
+    }, 80);
   }
   document.querySelectorAll('#dots span').forEach(function(d,j){ d.className=j===i?'on':''; });
   clearInterval(ptmr);
@@ -859,13 +876,12 @@ if menu == "📦 Importaciones":
             _pend_raw = df_base[mask_pend].copy()
 
             if not _pend_raw.empty:
-                # Detectar columna ETA en el consolidado
-                col_eta = next((c for c in _pend_raw.columns if c.upper() == "ETA"), None)
+                # Detectar columna ETA (buscar variantes de nombre)
+                col_eta = next((c for c in _pend_raw.columns if c.upper() in ("ETA", "FECHA ETA", "F. ETA", "FETA")), None)
+                # Groupby SIN ETA para no multiplicar filas
                 cols_grp = ["NOMBRE CORREO", "STATUS"]
                 if "HORA FECH" in _pend_raw.columns:
                     cols_grp.append("HORA FECH")
-                if col_eta:
-                    cols_grp.append(col_eta)
                 agg_col = "ASN" if "ASN" in _pend_raw.columns else "NOMBRE CORREO"
                 rename_map = {
                     agg_col: "ASNs",
@@ -873,13 +889,20 @@ if menu == "📦 Importaciones":
                     "STATUS": "Estado",
                     "HORA FECH": "Fecha ETD",
                 }
-                if col_eta:
-                    rename_map[col_eta] = "ETA"
                 df_pend = (
                     _pend_raw.groupby(cols_grp)[agg_col].nunique()
                     .reset_index()
                     .rename(columns=rename_map)
                 )
+                # Agregar ETA como columna aparte (primer valor por importación)
+                if col_eta:
+                    _eta_map = (
+                        _pend_raw.groupby("NOMBRE CORREO")[col_eta]
+                        .first()
+                        .reset_index()
+                        .rename(columns={"NOMBRE CORREO": "Importación", col_eta: "ETA"})
+                    )
+                    df_pend = df_pend.merge(_eta_map, on="Importación", how="left")
                 orden_map = {"ADUANAS": 0, "EN TRÁNSITO": 1, "EN TRANSITO": 1, "ORIGEN": 2, "SUPPLY": 3}
                 df_pend["_ord"] = df_pend["Estado"].str.upper().str.strip().map(orden_map).fillna(4)
                 df_pend = df_pend.sort_values("_ord").drop(columns=["_ord"]).reset_index(drop=True)
@@ -963,66 +986,64 @@ if menu == "📦 Importaciones":
                 '</table></div>'
             )
 
-        # ── Gráfico de barras comparativo (Plotly) ─────────────────────────
-        labels_pend = df_pend["Importación"].tolist() if not df_pend.empty else []
-        vals_pend   = df_pend["ASNs"].tolist()        if not df_pend.empty else []
-        labels_arr  = df_arr["Importación"].tolist()  if not df_arr.empty  else []
-        vals_arr    = df_arr["ASNs"].tolist()          if not df_arr.empty  else []
+        # ── Gráficos del dashboard: por fecha y por importación ──────────────
+        _gcol1, _gcol2 = st.columns(2)
 
-        all_labels = list(dict.fromkeys(labels_pend + labels_arr))
-        pend_map   = dict(zip(labels_pend, vals_pend))
-        arr_map    = dict(zip(labels_arr,  vals_arr))
+        with _gcol1:
+            # Barras: ASNs ARRIBADOS POR FECHA DE LLEGADA
+            if not df_arr.empty and "Fecha Llegada" in df_arr.columns:
+                _df_fch = df_arr.copy()
+                _df_fch["_f"] = pd.to_datetime(_df_fch["Fecha Llegada"], errors="coerce")
+                _df_fch = _df_fch.dropna(subset=["_f"]).sort_values("_f")
+                if not _df_fch.empty:
+                    fig_fecha = go.Figure()
+                    fig_fecha.add_trace(go.Bar(
+                        x=_df_fch["Fecha Llegada"].astype(str),
+                        y=_df_fch["ASNs"],
+                        marker_color="#1D9E75",
+                        text=_df_fch["ASNs"].astype(str),
+                        textposition="outside",
+                        textfont=dict(size=11, color="#1a7a4a"),
+                        cliponaxis=False
+                    ))
+                    fig_fecha.update_layout(
+                        height=260, showlegend=False,
+                        title=dict(text="ASNs arribados por fecha de llegada", font=dict(size=13,color="#1a7a4a"), x=0),
+                        margin=dict(l=10, r=10, t=40, b=60),
+                        paper_bgcolor="white", plot_bgcolor="white",
+                        xaxis=dict(tickfont=dict(size=10), showgrid=False, tickangle=-35),
+                        yaxis=dict(gridcolor="#f0faf4", tickfont=dict(size=10)),
+                        font=dict(family="Arial")
+                    )
+                    st.plotly_chart(fig_fecha, use_container_width=True)
+            else:
+                st.info("Sin datos de fecha de llegada.")
 
-        fig_bar = go.Figure()
-        fig_bar.add_trace(go.Bar(
-            name="Pendientes", x=all_labels,
-            y=[pend_map.get(l, 0) for l in all_labels],
-            marker_color="#BA7517", text=[pend_map.get(l, 0) for l in all_labels],
-            textposition="outside", textfont=dict(size=11)
-        ))
-        fig_bar.add_trace(go.Bar(
-            name="Arribados", x=all_labels,
-            y=[arr_map.get(l, 0) for l in all_labels],
-            marker_color="#1D9E75", text=[arr_map.get(l, 0) for l in all_labels],
-            textposition="outside", textfont=dict(size=11)
-        ))
-        fig_bar.update_layout(
-            barmode="group", height=260,
-            margin=dict(l=10, r=10, t=30, b=40),
-            paper_bgcolor="white", plot_bgcolor="white",
-            legend=dict(orientation="h", y=1.12, x=0),
-            xaxis=dict(tickfont=dict(size=11), showgrid=False),
-            yaxis=dict(gridcolor="#f0faf4", tickfont=dict(size=11)),
-            font=dict(family="Arial")
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
-
-        # ── Línea de tiempo de arribos ──────────────────────────────────────
-        if not df_arr.empty and "Fecha Llegada" in df_arr.columns:
-            df_arr_line = df_arr.copy()
-            df_arr_line["_fch"] = pd.to_datetime(df_arr_line["Fecha Llegada"], errors="coerce")
-            df_arr_line = df_arr_line.dropna(subset=["_fch"]).sort_values("_fch")
-            if not df_arr_line.empty:
-                fig_line = go.Figure()
-                fig_line.add_trace(go.Scatter(
-                    x=df_arr_line["Importación"], y=df_arr_line["ASNs"],
-                    mode="lines+markers+text",
-                    line=dict(color="#1D9E75", width=2.5),
-                    marker=dict(size=8, color="#1D9E75"),
-                    text=df_arr_line["ASNs"].astype(str),
-                    textposition="top center",
-                    textfont=dict(size=11, color="#1a7a4a"),
-                    fill="tozeroy", fillcolor="rgba(29,158,117,0.08)"
+        with _gcol2:
+            # Barras: ASNs ARRIBADOS POR IMPORTACIÓN
+            if not df_arr.empty:
+                fig_imp = go.Figure()
+                fig_imp.add_trace(go.Bar(
+                    x=df_arr["Importación"].astype(str),
+                    y=df_arr["ASNs"],
+                    marker_color="#378ADD",
+                    text=df_arr["ASNs"].astype(str),
+                    textposition="outside",
+                    textfont=dict(size=11, color="#185FA5"),
+                    cliponaxis=False
                 ))
-                fig_line.update_layout(
-                    height=220, title=dict(text="ASNs arribados por importación", font=dict(size=13), x=0),
-                    margin=dict(l=10, r=10, t=40, b=30),
+                fig_imp.update_layout(
+                    height=260, showlegend=False,
+                    title=dict(text="ASNs arribados por importación", font=dict(size=13,color="#1a7a4a"), x=0),
+                    margin=dict(l=10, r=10, t=40, b=60),
                     paper_bgcolor="white", plot_bgcolor="white",
-                    xaxis=dict(tickfont=dict(size=11), showgrid=False),
-                    yaxis=dict(gridcolor="#f0faf4", tickfont=dict(size=11), visible=False),
-                    font=dict(family="Arial"), showlegend=False
+                    xaxis=dict(tickfont=dict(size=10), showgrid=False, tickangle=-35),
+                    yaxis=dict(gridcolor="#f0faf4", tickfont=dict(size=10)),
+                    font=dict(family="Arial")
                 )
-                st.plotly_chart(fig_line, use_container_width=True)
+                st.plotly_chart(fig_imp, use_container_width=True)
+            else:
+                st.info("Sin datos de arribos aún.")
 
         # ── Tablas HTML estilizadas ────────────────────────────────────────
         c1, c2 = st.columns(2)
@@ -1253,10 +1274,11 @@ if menu == "📦 Importaciones":
                 + '</div>'  # wrap
             )
 
-        # ══════════════════════════════════════════════════════
-        # SLIDE 3: Gráficos — Barras comparativo + Línea arrivals
-        # ══════════════════════════════════════════════════════
-        # Slide 3: Gráficos — barras por fecha de llegada + barras por importación
+        # Slide 3: gráficos embebidos como tipo "plotly_multi" usando HTML con data attrs
+        # Estrategia: pasar los datos en el propio HTML como atributos data-* y
+        # renderizarlos con el Plotly que YA está cargado en el template padre.
+        # Se usa tipo "html" pero el JS del template detecta divs con data-chart
+        # y los renderiza con Plotly directamente — sin <script> que innerHTML ignora.
         graficos_slide = None
         try:
             import json as _json_g
@@ -1274,9 +1296,10 @@ if menu == "📦 Importaciones":
                 for _, row in df_arr.iterrows():
                     _datos_imp.append({"x": str(row["Importación"]), "y": int(row["ASNs"])})
 
-            _FECHA_JSON = _json_g.dumps(_datos_fecha)
-            _IMP_JSON   = _json_g.dumps(_datos_imp)
-            _JS_SCRIPT  = "(function(){\n  function renderBar(id, data, color) {\n    var el = document.getElementById(id);\n    if (!el || !data.length) return;\n    var parent = el.parentElement;\n    var W = parent ? parent.offsetWidth  - 32 : 400;\n    var H = parent ? parent.offsetHeight - 50 : 280;\n    if (W < 50) W = 400;\n    if (H < 50) H = 280;\n    var xs = data.map(function(d){ return d.x; });\n    var ys = data.map(function(d){ return d.y; });\n    Plotly.newPlot(id, [{\n      type: 'bar', x: xs, y: ys,\n      marker: { color: color, opacity: 0.85 },\n      text: ys.map(String), textposition: 'outside',\n      textfont: { size: 12, color: '#1a7a4a' },\n      cliponaxis: false\n    }], {\n      autosize: false, width: W, height: H,\n      paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff',\n      margin: { l: 40, r: 20, t: 20, b: 65 },\n      font: { family: 'Arial,sans-serif', size: 11 },\n      xaxis: { showgrid: false, tickfont: { size: 10 }, automargin: true, tickangle: -35 },\n      yaxis: { gridcolor: '#f0faf4', tickfont: { size: 10 }, zeroline: false }\n    }, { displayModeBar: false, responsive: false });\n  }\n  function renderAll() {\n    renderBar('gchart-fecha', _DFECHA, '#1D9E75');\n    renderBar('gchart-imp',   _DIMP,   '#378ADD');\n  }\n  setTimeout(renderAll, 150);\n  setTimeout(renderAll, 700);\n  window.addEventListener('resize', function(){\n    clearTimeout(window._gcrt);\n    window._gcrt = setTimeout(renderAll, 250);\n  });\n})();"
+            # Serializar como atributos HTML data-* (escaped para HTML)
+            import html as _html_esc
+            _FECHA_ATTR = _html_esc.escape(_json_g.dumps(_datos_fecha), quote=True)
+            _IMP_ATTR   = _html_esc.escape(_json_g.dumps(_datos_imp),   quote=True)
 
             graficos_slide = (
                 '<div style="width:100%;height:100%;padding:14px 18px;background:#f0faf4;'
@@ -1287,32 +1310,24 @@ if menu == "📦 Importaciones":
                 '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
                 'box-shadow:0 2px 8px rgba(0,0,0,.07);display:flex;flex-direction:column;min-height:0;">'
                 '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;flex-shrink:0;">'
-                '📅 ASNs arribados por fecha de llegada</div>'
-                '<div id="gchart-fecha" style="flex:1;min-height:0;width:100%;"></div>'
+                '📅 ASNs por fecha de llegada</div>'
+                '<div id="gchart-fecha" data-chart="bar" data-color="#1D9E75" '
+                'data-points="' + _FECHA_ATTR + '" style="flex:1;min-height:0;width:100%;"></div>'
                 '</div>'
 
                 '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
                 'box-shadow:0 2px 8px rgba(0,0,0,.07);display:flex;flex-direction:column;min-height:0;">'
                 '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;flex-shrink:0;">'
-                '📦 ASNs arribados por importación</div>'
-                '<div id="gchart-imp" style="flex:1;min-height:0;width:100%;"></div>'
+                '📦 ASNs por importación</div>'
+                '<div id="gchart-imp" data-chart="bar" data-color="#378ADD" '
+                'data-points="' + _IMP_ATTR + '" style="flex:1;min-height:0;width:100%;"></div>'
                 '</div>'
 
                 '</div></div>'
-                '<script>'
-                'var _DFECHA=' + _FECHA_JSON + ';'
-                'var _DIMP='   + _IMP_JSON   + ';'
-                + _JS_SCRIPT +
-                '</script>'
             )
         except Exception as _eg:
             graficos_slide = None
 
-        slides_imp = []
-        if apertura_slide:
-            slides_imp.append(("🏪 Próximas Aperturas", apertura_slide))
-        if status_slide:
-            slides_imp.append(("📋 Status Global Importaciones", status_slide))
         if graficos_slide:
             slides_imp.append(("📊 Gráficos de Importaciones", graficos_slide))
 
