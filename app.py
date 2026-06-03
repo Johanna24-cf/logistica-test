@@ -502,9 +502,9 @@ function goTo(i) {
         var data = JSON.parse(el.getAttribute('data-points') || '[]');
         var color = el.getAttribute('data-color') || '#1D9E75';
         if (!data.length) return;
-        var W = el.offsetWidth  || el.parentElement.offsetWidth  - 32 || 400;
-        var H = el.offsetHeight || el.parentElement.offsetHeight - 50 || 260;
-        if (H < 80) H = 260;
+        // Usar dimensiones fijas si el elemento las define (data-w / data-h)
+        var W = parseInt(el.getAttribute('data-w') || '0') || el.parentElement.clientWidth - 28 || 400;
+        var H = parseInt(el.getAttribute('data-h') || '0') || 190;
         Plotly.newPlot(el, [{
           type: 'bar',
           x: data.map(function(d){ return d.x; }),
@@ -512,14 +512,14 @@ function goTo(i) {
           marker: { color: color, opacity: 0.85 },
           text: data.map(function(d){ return String(d.y); }),
           textposition: 'outside', cliponaxis: false,
-          textfont: { size: 12, color: '#1a7a4a' }
+          textfont: { size: 11, color: '#1a7a4a' }
         }], {
           autosize: false, width: W, height: H,
           paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff',
-          margin: { l: 40, r: 20, t: 10, b: 70 },
-          font: { family: 'Arial,sans-serif', size: 11 },
-          xaxis: { showgrid: false, tickfont: { size: 10 }, tickangle: -35, automargin: true },
-          yaxis: { gridcolor: '#f0faf4', tickfont: { size: 10 }, zeroline: false }
+          margin: { l: 35, r: 10, t: 18, b: 55 },
+          font: { family: 'Arial,sans-serif', size: 10 },
+          xaxis: { showgrid: false, tickfont: { size: 9 }, tickangle: -35, automargin: true },
+          yaxis: { gridcolor: '#f0faf4', tickfont: { size: 9 }, zeroline: false }
         }, { displayModeBar: false, responsive: false });
       });
     }, 80);
@@ -1188,60 +1188,70 @@ if menu == "📦 Importaciones":
             _tbl_pend = _tbl2(df_pend) if not df_pend.empty else '<p style="color:#888;font-size:12px;padding:10px;">Sin pendientes</p>'
             _tbl_arr  = _tbl2(df_arr)  if not df_arr.empty  else '<p style="color:#888;font-size:12px;padding:10px;">Sin datos</p>'
 
-            status_slide = (
-                '<div style="width:100%;height:100%;padding:12px 18px;background:#f0faf4;'
-                'font-family:Arial,sans-serif;box-sizing:border-box;'
-                'display:flex;flex-direction:column;gap:10px;overflow:hidden;">'
+            # Tabla de arribados: solo 6 filas visibles, el resto con scroll
+            _tbl_arr_scroll = _tbl2(df_arr, mx=50) if not df_arr.empty else '<p style="color:#888;font-size:12px;padding:10px;">Sin datos</p>'
 
-                # ── Fila 1: 3 métricas ──
-                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;flex-shrink:0;">'
-                + '<div style="background:#fff;border-radius:12px;border-top:4px solid #2d9e6b;padding:12px 16px;">'
-                  '<div style="color:#aaa;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Total Importaciones</div>'
-                  '<div style="color:#1a7a4a;font-size:2.2rem;font-weight:900;line-height:1.1;">'+str(total_i)+'</div>'
+            status_slide = (
+                # Outer: fondo completo del iframe
+                '<div style="width:100%;height:100%;background:#f0faf4;display:flex;'
+                'align-items:center;justify-content:center;font-family:Arial,sans-serif;box-sizing:border-box;overflow:hidden;">'
+                # Inner: contenedor fijo 1160x740px — mismo tamaño siempre, no se estira
+                '<div style="width:1160px;height:740px;display:flex;flex-direction:column;gap:10px;">'
+
+                # ── Fila 1: 3 métricas — altura fija ──
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;height:80px;flex-shrink:0;">'
+                + '<div style="background:#fff;border-radius:12px;border-top:4px solid #2d9e6b;padding:10px 16px;">'
+                  '<div style="color:#aaa;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Total Importaciones</div>'
+                  '<div style="color:#1a7a4a;font-size:2rem;font-weight:900;line-height:1.1;">'+str(total_i)+'</div>'
                   '</div>'
-                + '<div style="background:#fff;border-radius:12px;border-top:4px solid #e8a020;padding:12px 16px;">'
-                  '<div style="color:#aaa;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Pendientes de Arribo</div>'
-                  '<div style="color:#e8a020;font-size:2.2rem;font-weight:900;line-height:1.1;">'+str(n_pend_i)+'</div>'
-                  '<div style="color:#aaa;font-size:10px;">'+str(n_pend_asn_i)+' ASNs</div>'
+                + '<div style="background:#fff;border-radius:12px;border-top:4px solid #e8a020;padding:10px 16px;">'
+                  '<div style="color:#aaa;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Pendientes de Arribo</div>'
+                  '<div style="color:#e8a020;font-size:2rem;font-weight:900;line-height:1.1;">'+str(n_pend_i)+'</div>'
+                  '<div style="color:#aaa;font-size:9px;">'+str(n_pend_asn_i)+' ASNs</div>'
                   '</div>'
-                + '<div style="background:#fff;border-radius:12px;border-top:4px solid #1D9E75;padding:12px 16px;">'
-                  '<div style="color:#aaa;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Arribados</div>'
-                  '<div style="color:#1D9E75;font-size:2.2rem;font-weight:900;line-height:1.1;">'+str(n_arr_i)+'</div>'
-                  '<div style="color:#aaa;font-size:10px;">'+str(n_arr_asn_i)+' ASNs</div>'
+                + '<div style="background:#fff;border-radius:12px;border-top:4px solid #1D9E75;padding:10px 16px;">'
+                  '<div style="color:#aaa;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Arribados</div>'
+                  '<div style="color:#1D9E75;font-size:2rem;font-weight:900;line-height:1.1;">'+str(n_arr_i)+'</div>'
+                  '<div style="color:#aaa;font-size:9px;">'+str(n_arr_asn_i)+' ASNs</div>'
                   '</div>'
                 + '</div>'
 
-                # ── Fila 2: 2 gráficos con data-chart ──
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;flex-shrink:0;height:220px;">'
+                # ── Fila 2: 2 gráficos — altura fija 230px ──
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;height:230px;flex-shrink:0;">'
                 '<div style="background:#fff;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;">'
-                '<div style="font-size:11px;font-weight:700;color:#1a7a4a;margin-bottom:6px;flex-shrink:0;">📅 ASNs por fecha de llegada</div>'
-                '<div id="ppt-gchart-fecha" data-chart="bar" data-color="#1D9E75" data-points="'+_FECHA_ATTR+'" style="flex:1;min-height:0;"></div>'
+                '<div style="font-size:11px;font-weight:700;color:#1a7a4a;margin-bottom:4px;">📅 ASNs por fecha de llegada</div>'
+                '<div id="ppt-gchart-fecha" data-chart="bar" data-color="#1D9E75" data-points="'+_FECHA_ATTR+'" data-w="555" data-h="190"></div>'
                 '</div>'
                 '<div style="background:#fff;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;">'
-                '<div style="font-size:11px;font-weight:700;color:#1a7a4a;margin-bottom:6px;flex-shrink:0;">📦 ASNs por importación</div>'
-                '<div id="ppt-gchart-imp" data-chart="bar" data-color="#378ADD" data-points="'+_IMP_ATTR+'" style="flex:1;min-height:0;"></div>'
+                '<div style="font-size:11px;font-weight:700;color:#1a7a4a;margin-bottom:4px;">📦 ASNs por importación</div>'
+                '<div id="ppt-gchart-imp" data-chart="bar" data-color="#378ADD" data-points="'+_IMP_ATTR+'" data-w="555" data-h="190"></div>'
                 '</div>'
                 '</div>'
 
-                # ── Fila 3: 2 tablas ──
+                # ── Fila 3: 2 tablas — altura fija, solo arribados con scroll ──
                 '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:0;">'
-                '<div style="background:#fff;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;min-height:0;">'
-                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-shrink:0;">'
+
+                # Tabla pendientes — sin scroll (pocos registros)
+                '<div style="background:#fff;border-radius:12px;padding:10px 14px;overflow:hidden;">'
+                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
                 '<span style="font-size:12px;font-weight:700;color:#1a7a4a;">⏳ Pendientes de Arribo</span>'
                 '<span style="background:#FAEEDA;color:#854F0B;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;">'
                 +str(n_pend_i)+' importaciones · '+str(n_pend_asn_i)+' ASNs</span></div>'
-                '<div style="overflow-y:auto;flex:1;">'+_tbl_pend+'</div>'
+                + _tbl_pend +
                 '</div>'
-                '<div style="background:#fff;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;min-height:0;">'
-                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-shrink:0;">'
+
+                # Tabla arribados — con scroll, altura fija
+                '<div style="background:#fff;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;">'
+                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-shrink:0;">'
                 '<span style="font-size:12px;font-weight:700;color:#1a7a4a;">✅ Arribados</span>'
                 '<span style="background:#EAF3DE;color:#3B6D11;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;">'
                 +str(n_arr_i)+' importaciones · '+str(n_arr_asn_i)+' ASNs</span></div>'
-                '<div style="overflow-y:auto;flex:1;">'+_tbl_arr+'</div>'
-                '</div>'
+                '<div style="overflow-y:auto;flex:1;">'+_tbl_arr_scroll+'</div>'
                 '</div>'
 
-                '</div>'  # wrap
+                '</div>'  # fila 3
+                '</div>'  # inner fixed
+                '</div>'  # outer
             )
 
         except Exception as _eg_s:
