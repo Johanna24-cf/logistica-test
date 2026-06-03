@@ -496,6 +496,16 @@ function goTo(i) {
   } else {
     plt.style.display='none'; htm.style.display='block';
     htm.innerHTML=SLIDES[i].content;
+    // innerHTML no ejecuta <script> — reinsertarlos manualmente
+    var scripts = htm.querySelectorAll('script');
+    scripts.forEach(function(oldScript) {
+      var newScript = document.createElement('script');
+      Array.from(oldScript.attributes).forEach(function(attr) {
+        newScript.setAttribute(attr.name, attr.value);
+      });
+      newScript.textContent = oldScript.textContent;
+      oldScript.parentNode.replaceChild(newScript, oldScript);
+    });
   }
   document.querySelectorAll('#dots span').forEach(function(d,j){ d.className=j===i?'on':''; });
   clearInterval(ptmr);
