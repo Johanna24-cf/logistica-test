@@ -887,7 +887,7 @@ if menu == "📦 Importaciones":
                     agg_col: "ASNs",
                     "NOMBRE CORREO": "Importación",
                     "STATUS": "Estado",
-                    "HORA FECH": "Fecha ETD",
+                    "ETA": "ETA",
                 }
                 df_pend = (
                     _pend_raw.groupby(cols_grp)[agg_col].nunique()
