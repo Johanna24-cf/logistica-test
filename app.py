@@ -1310,10 +1310,75 @@ if menu == "📦 Importaciones":
                         font=dict(family="Arial,sans-serif"), showlegend=False
                     )
 
-            # Slide de gráficos: se pasan como figuras Plotly (el motor PPT las renderiza igual que los otros slides)
-            # Usamos una lista de sub-slides: uno para barras, uno para línea
-            graficos_slide = _fig_bar_s  # barra comparativa como slide Plotly
-            graficos_slide_line = _fig_line_s  # línea de arrivals
+            # Slide de gráficos: convertir a HTML puro con Plotly embebido
+            # El motor PPT renderiza tipo="html" directamente en el iframe sin procesamiento JS especial
+            import plotly.io as _pio_html
+            _BAR_JSON = _pio_html.to_json(_fig_bar_s)
+            _LINE_JSON = _pio_html.to_json(_fig_line_s) if _fig_line_s else ""
+
+            _grid_cols = "1fr 1fr" if _LINE_JSON else "1fr"
+            graficos_slide = (
+                '<div style="width:100%;height:100%;padding:16px 22px;background:#f0faf4;'
+                'font-family:Arial,sans-serif;box-sizing:border-box;'
+                'display:flex;flex-direction:column;gap:14px;overflow:hidden;">'
+                '<div style="display:grid;grid-template-columns:' + _grid_cols + ';gap:16px;flex:1;min-height:0;">'
+
+                # Panel barras
+                '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
+                'box-shadow:0 2px 10px rgba(0,0,0,.07);display:flex;flex-direction:column;min-height:0;">'
+                '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:10px;flex-shrink:0;">'
+                '📊 ASNs por importación: pendientes vs arribados</div>'
+                '<div id="chart-bar" style="flex:1;min-height:0;"></div>'
+                '</div>'
+
+                # Panel línea (solo si existe)
+                + (
+                    '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
+                    'box-shadow:0 2px 10px rgba(0,0,0,.07);display:flex;flex-direction:column;min-height:0;">'
+                    '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:10px;flex-shrink:0;">'
+                    '📈 Línea de tiempo — ASNs arribados</div>'
+                    '<div id="chart-line" style="flex:1;min-height:0;"></div>'
+                    '</div>'
+                    if _LINE_JSON else ''
+                )
+
+                + '</div></div>'
+                '<script>'
+                'var _bf=' + _BAR_JSON + ';'
+                + ('var _lf=' + _LINE_JSON + ';' if _LINE_JSON else '')
+                + '''
+(function(){
+  function _sz(id, fig, extra_layout) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var W = el.offsetWidth || 400, H = el.offsetHeight || 300;
+    var lay = Object.assign({}, fig.layout || {}, {
+      autosize: false, width: W, height: H,
+      paper_bgcolor: "#ffffff", plot_bgcolor: "#ffffff",
+      margin: {l:50,r:20,t:20,b:60},
+      font: {family:"Arial,sans-serif", size:12},
+      legend: {orientation:"h", y:1.08, x:0},
+      xaxis: Object.assign({}, (fig.layout||{}).xaxis||{}, {showgrid:false, tickfont:{size:11}}),
+      yaxis: Object.assign({}, (fig.layout||{}).yaxis||{}, {gridcolor:"#f0faf4", tickfont:{size:11}})
+    }, extra_layout||{});
+    Plotly.newPlot(id, fig.data, lay, {displayModeBar:false, responsive:false});
+  }
+  window.addEventListener('load', function(){
+    _sz('chart-bar', _bf);
+''' + ("    _sz('chart-line', _lf, {yaxis:{visible:false}, margin:{l:20,r:20,t:20,b:60}});" if _LINE_JSON else '') + '''
+  });
+  window.addEventListener('resize', function(){
+    clearTimeout(window._grt);
+    window._grt = setTimeout(function(){
+      _sz('chart-bar', _bf);
+''' + ("      _sz('chart-line', _lf, {yaxis:{visible:false}, margin:{l:20,r:20,t:20,b:60}});" if _LINE_JSON else '') + '''
+    }, 200);
+  });
+})();
+'''
+                + '</script>'
+            )
+            graficos_slide_line = None  # ya incluido en graficos_slide
         except Exception as _eg:
             graficos_slide = None
 
@@ -1323,9 +1388,7 @@ if menu == "📦 Importaciones":
         if status_slide:
             slides_imp.append(("📋 Status Global Importaciones", status_slide))
         if graficos_slide:
-            slides_imp.append(("📊 ASNs: Pendientes vs Arribados", graficos_slide))
-        if 'graficos_slide_line' in dir() and graficos_slide_line:
-            slides_imp.append(("📈 Línea de tiempo — Arrivals", graficos_slide_line))
+            slides_imp.append(("📊 Gráficos de Importaciones", graficos_slide))
 
         if slides_imp:
             mostrar_seccion_ppt("📦 Importaciones", slides_imp)
