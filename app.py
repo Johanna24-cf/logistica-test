@@ -512,14 +512,14 @@ function goTo(i) {
           marker: { color: color, opacity: 0.85 },
           text: data.map(function(d){ return String(d.y); }),
           textposition: 'outside', cliponaxis: false,
-          textfont: { size: 13, color: '#1a7a4a' }
+          textfont: { size: 15, color: '#1a7a4a' }
         }], {
           autosize: false, width: W, height: H,
           paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff',
           margin: { l: 35, r: 10, t: 18, b: 55 },
           font: { family: 'Arial,sans-serif', size: 10 },
-          xaxis: { showgrid: false, tickfont: { size: 11 }, tickangle: -35, automargin: true },
-          yaxis: { gridcolor: '#f0faf4', tickfont: { size: 11 }, zeroline: false }
+          xaxis: { showgrid: false, tickfont: { size: 13 }, tickangle: -35, automargin: true },
+          yaxis: { gridcolor: '#f0faf4', tickfont: { size: 13 }, zeroline: false }
         }, { displayModeBar: false, responsive: false });
       });
     }, 80);
@@ -1156,7 +1156,7 @@ if menu == "📦 Importaciones":
                 df = df.head(mx)
                 heads = "".join(
                     '<th style="padding:7px 12px;background:#1a7a4a;color:#fff;font-size:11px;'
-                    'font-weight:700;text-align:left;position:sticky;top:0;z-index:1;font-size:13px;">' + str(c) + '</th>'
+                    'font-weight:700;text-align:left;position:sticky;top:0;z-index:1;font-size:15px;">' + str(c) + '</th>'
                     for c in df.columns
                 )
                 rows_html = ""
@@ -1173,13 +1173,13 @@ if menu == "📦 Importaciones":
                                       'border-radius:20px;font-size:12px;font-weight:600;">'+vs+'</span></td>')
                         elif cn == "ASNs":
                             cells += ('<td style="padding:6px 12px;border-bottom:1px solid #f0faf4;'
-                                      'text-align:right;font-weight:700;color:#1a7a4a;font-size:14px;">'+vs+'</td>')
+                                      'text-align:right;font-weight:700;color:#1a7a4a;font-size:16px;">'+vs+'</td>')
                         elif cn in ("ETA","Fecha ETD","Fecha Llegada","FCH LLEGADA","HORA FECH"):
                             cells += ('<td style="padding:6px 12px;border-bottom:1px solid #f0faf4;'
-                                      'color:#e8a020;font-weight:600;font-size:13px;">📅 '+vs+'</td>')
+                                      'color:#e8a020;font-weight:600;font-size:15px;">📅 '+vs+'</td>')
                         else:
                             cells += ('<td style="padding:6px 12px;border-bottom:1px solid #f0faf4;'
-                                      'color:#2d3436;font-size:13px;">'+vs+'</td>')
+                                      'color:#2d3436;font-size:15px;">'+vs+'</td>')
                     rows_html += '<tr style="background:'+bg+';">'+cells+'</tr>'
                 return ('<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">'
                         '<thead><tr>'+heads+'</tr></thead>'
@@ -1201,29 +1201,29 @@ if menu == "📦 Importaciones":
                 # ── Fila 1: 3 métricas — altura fija ──
                 '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;height:100px;flex-shrink:0;">'
                 + '<div style="background:#fff;border-radius:12px;border-top:4px solid #2d9e6b;padding:10px 16px;">'
-                  '<div style="color:#aaa;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Total Importaciones</div>'
-                  '<div style="color:#1a7a4a;font-size:2.4rem;font-weight:900;line-height:1.1;">'+str(total_i)+'</div>'
+                  '<div style="color:#aaa;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Total Importaciones</div>'
+                  '<div style="color:#1a7a4a;font-size:2.8rem;font-weight:900;line-height:1.1;">'+str(total_i)+'</div>'
                   '</div>'
                 + '<div style="background:#fff;border-radius:12px;border-top:4px solid #e8a020;padding:10px 16px;">'
-                  '<div style="color:#aaa;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Pendientes de Arribo</div>'
-                  '<div style="color:#e8a020;font-size:2.4rem;font-weight:900;line-height:1.1;">'+str(n_pend_i)+'</div>'
-                  '<div style="color:#aaa;font-size:11px;">'+str(n_pend_asn_i)+' ASNs</div>'
+                  '<div style="color:#aaa;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Pendientes de Arribo</div>'
+                  '<div style="color:#e8a020;font-size:2.8rem;font-weight:900;line-height:1.1;">'+str(n_pend_i)+'</div>'
+                  '<div style="color:#aaa;font-size:13px;">'+str(n_pend_asn_i)+' ASNs</div>'
                   '</div>'
                 + '<div style="background:#fff;border-radius:12px;border-top:4px solid #1D9E75;padding:10px 16px;">'
-                  '<div style="color:#aaa;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Arribados</div>'
-                  '<div style="color:#1D9E75;font-size:2.4rem;font-weight:900;line-height:1.1;">'+str(n_arr_i)+'</div>'
-                  '<div style="color:#aaa;font-size:11px;">'+str(n_arr_asn_i)+' ASNs</div>'
+                  '<div style="color:#aaa;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Arribados</div>'
+                  '<div style="color:#1D9E75;font-size:2.8rem;font-weight:900;line-height:1.1;">'+str(n_arr_i)+'</div>'
+                  '<div style="color:#aaa;font-size:13px;">'+str(n_arr_asn_i)+' ASNs</div>'
                   '</div>'
                 + '</div>'
 
                 # ── Fila 2: 2 gráficos — altura fija 230px ──
                 '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;height:310px;flex-shrink:0;">'
                 '<div style="background:#fff;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;">'
-                '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:4px;">📅 ASNs por fecha de llegada</div>'
+                '<div style="font-size:15px;font-weight:700;color:#1a7a4a;margin-bottom:4px;">📅 ASNs por fecha de llegada</div>'
                 '<div id="ppt-gchart-fecha" data-chart="bar" data-color="#1D9E75" data-points="'+_FECHA_ATTR+'" data-w="720" data-h="255"></div>'
                 '</div>'
                 '<div style="background:#fff;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;">'
-                '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:4px;">📦 ASNs por importación</div>'
+                '<div style="font-size:15px;font-weight:700;color:#1a7a4a;margin-bottom:4px;">📦 ASNs por importación</div>'
                 '<div id="ppt-gchart-imp" data-chart="bar" data-color="#378ADD" data-points="'+_IMP_ATTR+'" data-w="720" data-h="255"></div>'
                 '</div>'
                 '</div>'
@@ -1234,8 +1234,8 @@ if menu == "📦 Importaciones":
                 # Tabla pendientes — sin scroll (pocos registros)
                 '<div style="background:#fff;border-radius:12px;padding:10px 14px;overflow:hidden;">'
                 '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
-                '<span style="font-size:14px;font-weight:700;color:#1a7a4a;">⏳ Pendientes de Arribo</span>'
-                '<span style="background:#FAEEDA;color:#854F0B;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600;">' 
+                '<span style="font-size:16px;font-weight:700;color:#1a7a4a;">⏳ Pendientes de Arribo</span>'
+                '<span style="background:#FAEEDA;color:#854F0B;padding:2px 8px;border-radius:20px;font-size:13px;font-weight:600;">' 
                 +str(n_pend_i)+' importaciones · '+str(n_pend_asn_i)+' ASNs</span></div>'
                 + _tbl_pend +
                 '</div>'
@@ -1243,8 +1243,8 @@ if menu == "📦 Importaciones":
                 # Tabla arribados — con scroll, altura fija
                 '<div style="background:#fff;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;">'
                 '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-shrink:0;">'
-                '<span style="font-size:14px;font-weight:700;color:#1a7a4a;">✅ Arribados</span>'
-                '<span style="background:#EAF3DE;color:#3B6D11;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600;">' 
+                '<span style="font-size:16px;font-weight:700;color:#1a7a4a;">✅ Arribados</span>'
+                '<span style="background:#EAF3DE;color:#3B6D11;padding:2px 8px;border-radius:20px;font-size:13px;font-weight:600;">' 
                 +str(n_arr_i)+' importaciones · '+str(n_arr_asn_i)+' ASNs</span></div>'
                 '<div style="overflow-y:auto;flex:1;">'+_tbl_arr_scroll+'</div>'
                 '</div>'
