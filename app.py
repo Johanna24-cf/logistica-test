@@ -1328,6 +1328,11 @@ if menu == "📦 Importaciones":
         except Exception as _eg:
             graficos_slide = None
 
+        slides_imp = []
+        if apertura_slide:
+            slides_imp.append(("🏪 Próximas Aperturas", apertura_slide))
+        if status_slide:
+            slides_imp.append(("📋 Status Global Importaciones", status_slide))
         if graficos_slide:
             slides_imp.append(("📊 Gráficos de Importaciones", graficos_slide))
 
