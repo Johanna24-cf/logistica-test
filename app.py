@@ -1189,17 +1189,17 @@ if menu == "📦 Importaciones":
             _tbl_arr  = _tbl2(df_arr)  if not df_arr.empty  else '<p style="color:#888;font-size:12px;padding:10px;">Sin datos</p>'
 
             # Tabla de arribados: solo 6 filas visibles, el resto con scroll
-            _tbl_arr_scroll = _tbl2(df_arr, mx=50) if not df_arr.empty else '<p style="color:#888;font-size:12px;padding:10px;">Sin datos</p>'
+            _tbl_arr_scroll = _tbl2(df_arr.head(6), mx=6) if not df_arr.empty else '<p style="color:#888;font-size:12px;padding:10px;">Sin datos</p>'
 
             status_slide = (
                 # Outer: fondo completo del iframe
                 '<div style="width:100%;height:100%;background:#f0faf4;display:flex;'
                 'align-items:center;justify-content:center;font-family:Arial,sans-serif;box-sizing:border-box;overflow:hidden;">'
                 # Inner: contenedor fijo 1160x740px — mismo tamaño siempre, no se estira
-                '<div style="width:1160px;height:740px;display:flex;flex-direction:column;gap:10px;">'
+                '<div style="width:1340px;height:820px;display:flex;flex-direction:column;gap:10px;">'
 
                 # ── Fila 1: 3 métricas — altura fija ──
-                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;height:80px;flex-shrink:0;">'
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;height:90px;flex-shrink:0;">'
                 + '<div style="background:#fff;border-radius:12px;border-top:4px solid #2d9e6b;padding:10px 16px;">'
                   '<div style="color:#aaa;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Total Importaciones</div>'
                   '<div style="color:#1a7a4a;font-size:2rem;font-weight:900;line-height:1.1;">'+str(total_i)+'</div>'
@@ -1217,14 +1217,14 @@ if menu == "📦 Importaciones":
                 + '</div>'
 
                 # ── Fila 2: 2 gráficos — altura fija 230px ──
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;height:230px;flex-shrink:0;">'
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;height:270px;flex-shrink:0;">'
                 '<div style="background:#fff;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;">'
                 '<div style="font-size:11px;font-weight:700;color:#1a7a4a;margin-bottom:4px;">📅 ASNs por fecha de llegada</div>'
-                '<div id="ppt-gchart-fecha" data-chart="bar" data-color="#1D9E75" data-points="'+_FECHA_ATTR+'" data-w="555" data-h="190"></div>'
+                '<div id="ppt-gchart-fecha" data-chart="bar" data-color="#1D9E75" data-points="'+_FECHA_ATTR+'" data-w="640" data-h="220"></div>'
                 '</div>'
                 '<div style="background:#fff;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;">'
                 '<div style="font-size:11px;font-weight:700;color:#1a7a4a;margin-bottom:4px;">📦 ASNs por importación</div>'
-                '<div id="ppt-gchart-imp" data-chart="bar" data-color="#378ADD" data-points="'+_IMP_ATTR+'" data-w="555" data-h="190"></div>'
+                '<div id="ppt-gchart-imp" data-chart="bar" data-color="#378ADD" data-points="'+_IMP_ATTR+'" data-w="640" data-h="220"></div>'
                 '</div>'
                 '</div>'
 
