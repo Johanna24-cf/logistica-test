@@ -1343,22 +1343,41 @@ if menu == "📦 Importaciones":
             """, unsafe_allow_html=True)
             st.markdown("")
 
-            # ASNs pendientes de almacenamiento: STATUS_REC=Pendiente y TIENDA=4298
-            asns_almacen = []
+            # Recepción pendiente de almacenamiento: STATUS_REC=Pendiente y TIENDA=4298
+            df_recep_stk = pd.DataFrame()
             if not df_recep.empty and "STATUS_REC" in df_recep.columns and "ASN" in df_recep.columns:
                 mask_stk = df_recep["STATUS_REC"].astype(str).str.strip().str.upper() == "PENDIENTE"
                 if "TIENDA" in df_recep.columns:
                     mask_stk = mask_stk & (df_recep["TIENDA"].astype(str).str.strip() == "4298")
-                asns_almacen = sorted(
-                    df_recep[mask_stk]["ASN"].astype(str).str.strip().tolist()
-                )
+                df_recep_stk = df_recep[mask_stk].copy()
 
-            if not asns_almacen:
+            # Importaciones disponibles (las que tienen ASNs pendientes de stock)
+            imps_stk = []
+            if not df_recep_stk.empty and "IMPORTACION" in df_recep_stk.columns:
+                imps_stk = sorted(df_recep_stk["IMPORTACION"].astype(str).str.strip().unique().tolist())
+
+            if df_recep_stk.empty or not imps_stk:
                 st.success("✅ No hay ASNs pendientes de almacenamiento.")
             else:
+                # Selector de importación fuera del form para filtrar ASNs dinámicamente
+                imp_stk_sel = st.selectbox(
+                    f"📋 Importación ({len(imps_stk)} disponibles)",
+                    imps_stk,
+                    key="sel_imp_stk"
+                )
+
+                # Filtrar ASNs según importación seleccionada
+                asns_almacen = []
+                if imp_stk_sel:
+                    asns_almacen = sorted(
+                        df_recep_stk[
+                            df_recep_stk["IMPORTACION"].astype(str).str.strip() == imp_stk_sel
+                        ]["ASN"].astype(str).str.strip().tolist()
+                    )
+
                 with st.form("form_stock", clear_on_submit=True):
                     asns_stk = st.multiselect(
-                        f"📦 ASNs pendientes ({len(asns_almacen)} disponibles)",
+                        f"📦 ASNs ({len(asns_almacen)} disponibles)",
                         options=["TODAS"] + asns_almacen,
                         default=["TODAS"]
                     )
@@ -1380,7 +1399,7 @@ if menu == "📦 Importaciones":
                             if errores:
                                 st.warning(f"No se encontraron: {errores}")
                             else:
-                                st.toast(f"{len(lista)} ASN(s) confirmados en stock ✅", icon="🏢")
+                                st.toast(f"{len(lista)} ASN(s) de {imp_stk_sel} confirmados en stock ✅", icon="🏢")
                             st.cache_data.clear()
                             st.rerun()
                         except Exception as e:
