@@ -418,7 +418,7 @@ def _ppt_template():
   #pb { height:5px; background:#1a7a4a; border-radius:3px; width:0%; }
   #body { flex:1; min-height:0; border:3px solid #2d9e6b; border-radius:14px; background:#fff; overflow:hidden; display:flex; align-items:stretch; }
   #plt-div { width:100%; height:100%; }
-  #html-div { width:100%; height:100%; overflow-y:auto; overflow-x:hidden; display:none; }
+  #html-div { width:100%; height:100%; overflow:hidden; display:none; }
   #footer { display:flex; align-items:center; justify-content:space-between; background:#fff; border-radius:12px; border:2px solid #c8e06a; padding:6px 16px; flex-shrink:0; }
   #dots { display:flex; gap:8px; align-items:center; }
   #dots span { width:10px; height:10px; border-radius:50%; display:inline-block; cursor:pointer; background:#c8e06a; border:2px solid #2d9e6b; transition:all 0.25s; }
@@ -932,8 +932,8 @@ if menu == "📦 Importaciones":
             df_ap2 = df_ap2[df_ap2["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
             cards = "".join(_card_ap(str(r["TIENDA"]), str(r["DESCRIPCION"]), str(r.get("FCH ESTIMADA",""))) for _, r in df_ap2.iterrows())
             apertura_slide = (
-                '<div style="width:100%;height:100vh;padding:20px 28px 16px;background:linear-gradient(135deg,#f0faf4,#e8f5ee);'
-                'font-family:Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;gap:14px;">'
+                '<div style="width:100%;height:100%;padding:20px 28px 16px;background:linear-gradient(135deg,#f0faf4,#e8f5ee);'
+                'font-family:Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;gap:14px;overflow:hidden;">'
                 '<div style="font-size:11px;font-weight:700;color:#2d9e6b;text-transform:uppercase;letter-spacing:1.5px;flex-shrink:0;">'
                 '🏪 Próximas Aperturas de Tiendas</div>'
                 '<div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:16px;flex:1;min-height:0;">'
@@ -1033,9 +1033,9 @@ if menu == "📦 Importaciones":
                 )
 
             status_slide = (
-                '<div style="width:100%;height:100vh;padding:16px 22px;'
+                '<div style="width:100%;height:100%;padding:16px 22px;'
                 'background:linear-gradient(135deg,#f0faf4,#e8f5ee);'
-                'font-family:Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;">'
+                'font-family:Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;overflow:hidden;">'
 
                 # ── Fila 1: 4 KPIs ──
                 '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;flex-shrink:0;">'
