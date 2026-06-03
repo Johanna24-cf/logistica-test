@@ -785,7 +785,7 @@ def update_consolidado_arribo(doc, fecha, asns_sel=None):
                                 for j in range(1, 10) if f"X{j}" in headers)
                     proc = "APERTURA" if es_ap else "POR DISTRIBUIR"
 
-                col_hora_fech_idx = headers.index("HORA FECH") if "HORA FECH" in headers else 0
+                col_hora_fech_idx = headers.index("ETA") if "ETA" in headers else 0
                 bulk_data.append([
                     row[headers.index("ID_DESPACHO")] if "ID_DESPACHO" in headers else row[0],
                     row[col_doc],
@@ -880,8 +880,8 @@ if menu == "📦 Importaciones":
                 col_eta = next((c for c in _pend_raw.columns if c.upper() in ("ETA", "FECHA ETA", "F. ETA", "FETA")), None)
                 # Groupby SIN ETA para no multiplicar filas
                 cols_grp = ["NOMBRE CORREO", "STATUS"]
-                if "HORA FECH" in _pend_raw.columns:
-                    cols_grp.append("HORA FECH")
+                if "ETA" in _pend_raw.columns:
+                    cols_grp.append("ETA")
                 agg_col = "ASN" if "ASN" in _pend_raw.columns else "NOMBRE CORREO"
                 rename_map = {
                     agg_col: "ASNs",
