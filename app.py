@@ -820,36 +820,55 @@ if menu == "📦 Importaciones":
         df_pend = pd.DataFrame()
         df_arr  = pd.DataFrame()
 
-        # Importaciones ya en recepción (columna IMPORTACION)
-        importaciones_recibidas = set()
-        if not df_recep.empty and "IMPORTACION" in df_recep.columns:
-            importaciones_recibidas = set(
-                df_recep["IMPORTACION"].astype(str).str.strip().str.lower().unique()
+        # Pares (importacion, ASN) ya en recepción — lógica por combinación, no solo por importación
+        pares_recibidos = set()
+        if not df_recep.empty and "IMPORTACION" in df_recep.columns and "ASN" in df_recep.columns:
+            pares_recibidos = set(
+                zip(
+                    df_recep["IMPORTACION"].astype(str).str.strip().str.lower(),
+                    df_recep["ASN"].astype(str).str.strip().str.lower()
+                )
             )
 
         if not df_import.empty and "NOMBRE CORREO" in df_import.columns:
-            # Filtrar Recuento = 1 (columna puede ser RECUENTO o Recuento)
+            # Filtrar Recuento = 1
             col_rec = next((c for c in df_import.columns if c.upper() == "RECUENTO"), None)
             df_base = df_import[df_import[col_rec].isin(["1", "1.0"])].copy() if col_rec else df_import.copy()
 
-            # Pendientes = en consolidado y NO en recepción
-            mask_pend = ~df_base["NOMBRE CORREO"].astype(str).str.strip().str.lower().isin(importaciones_recibidas)
+            # Pendientes = ASNs del consolidado cuyo par (importacion, ASN) NO está en recepción
+            if "ASN" in df_base.columns and pares_recibidos:
+                par_key = list(zip(
+                    df_base["NOMBRE CORREO"].astype(str).str.strip().str.lower(),
+                    df_base["ASN"].astype(str).str.strip().str.lower()
+                ))
+                mask_pend = [p not in pares_recibidos for p in par_key]
+            else:
+                # Fallback: si no hay ASN en consolidado, filtrar por importación completa
+                importaciones_recibidas = set(r[0] for r in pares_recibidos)
+                mask_pend = ~df_base["NOMBRE CORREO"].astype(str).str.strip().str.lower().isin(importaciones_recibidas)
             _pend_raw = df_base[mask_pend].copy()
 
             if not _pend_raw.empty:
+                # Detectar columna ETA en el consolidado
+                col_eta = next((c for c in _pend_raw.columns if c.upper() == "ETA"), None)
                 cols_grp = ["NOMBRE CORREO", "STATUS"]
                 if "HORA FECH" in _pend_raw.columns:
                     cols_grp.append("HORA FECH")
+                if col_eta:
+                    cols_grp.append(col_eta)
                 agg_col = "ASN" if "ASN" in _pend_raw.columns else "NOMBRE CORREO"
+                rename_map = {
+                    agg_col: "ASNs",
+                    "NOMBRE CORREO": "Importación",
+                    "STATUS": "Estado",
+                    "HORA FECH": "Fecha ETD",
+                }
+                if col_eta:
+                    rename_map[col_eta] = "ETA"
                 df_pend = (
                     _pend_raw.groupby(cols_grp)[agg_col].nunique()
                     .reset_index()
-                    .rename(columns={
-                        agg_col: "ASNs",
-                        "NOMBRE CORREO": "Importación",
-                        "STATUS": "Estado",
-                        "HORA FECH": "Fecha ETD"
-                    })
+                    .rename(columns=rename_map)
                 )
                 orden_map = {"ADUANAS": 0, "EN TRÁNSITO": 1, "EN TRANSITO": 1, "ORIGEN": 2, "SUPPLY": 3}
                 df_pend["_ord"] = df_pend["Estado"].str.upper().str.strip().map(orden_map).fillna(4)
@@ -950,7 +969,28 @@ if menu == "📦 Importaciones":
             trans_i = total_i - arr_i
             pct     = int(arr_i / total_i * 100) if total_i else 0
 
-            df_pend2 = df_import[df_import["STATUS"]!="ARRIBADO"].groupby(["NOMBRE CORREO","HORA FECH","STATUS"]).size().reset_index(name="ASNs")
+            # Pendientes slide: excluir pares (importacion+ASN) ya en recepción
+            _col_eta2 = next((c for c in df_import.columns if c.upper() == "ETA"), None)
+            if not df_recep.empty and "IMPORTACION" in df_recep.columns and "ASN" in df_recep.columns and "ASN" in df_import.columns:
+                _pares2 = set(zip(
+                    df_recep["IMPORTACION"].astype(str).str.strip().str.lower(),
+                    df_recep["ASN"].astype(str).str.strip().str.lower()
+                ))
+                _par_keys2 = list(zip(
+                    df_import["NOMBRE CORREO"].astype(str).str.strip().str.lower(),
+                    df_import["ASN"].astype(str).str.strip().str.lower()
+                ))
+                _mask2 = [p not in _pares2 for p in _par_keys2]
+                _df_imp_pend2 = df_import[_mask2].copy()
+            else:
+                _df_imp_pend2 = df_import[df_import["STATUS"] != "ARRIBADO"].copy()
+
+            _grp2 = ["NOMBRE CORREO", "HORA FECH", "STATUS"]
+            if _col_eta2:
+                _grp2.append(_col_eta2)
+            df_pend2 = _df_imp_pend2.groupby(_grp2).size().reset_index(name="ASNs")
+            if _col_eta2 and _col_eta2 != "ETA":
+                df_pend2 = df_pend2.rename(columns={_col_eta2: "ETA"})
             orden_s  = {"ADUANAS":0,"EN TRÁNSITO":1,"EN TRANSITO":1,"ORIGEN":2}
             df_pend2["_o"] = df_pend2["STATUS"].str.upper().str.strip().map(orden_s).fillna(
                 df_pend2["STATUS"].apply(lambda s: 99 if str(s).strip()=="" else 3))
@@ -980,26 +1020,6 @@ if menu == "📦 Importaciones":
                 return ('<table style="width:100%;border-collapse:collapse;">'
                         '<thead><tr>' + heads + '</tr></thead>'
                         '<tbody>' + rows + '</tbody></table>')
-
-            # Donut SVG
-            r_svg, cx, cy = 52, 58, 58
-            circ = 2 * 3.14159 * r_svg
-            dash = circ * pct / 100
-            svg_donut = (
-                f'<svg width="116" height="116" viewBox="0 0 116 116">'
-                f'<circle cx="{cx}" cy="{cy}" r="{r_svg}" fill="none" stroke="#e0f2e9" stroke-width="13"/>'
-                f'<circle cx="{cx}" cy="{cy}" r="{r_svg}" fill="none" '
-                f'stroke="url(#grad)" stroke-width="13" '
-                f'stroke-dasharray="{dash:.1f} {circ:.1f}" stroke-linecap="round" '
-                f'transform="rotate(-90 {cx} {cy})"/>'
-                f'<defs><linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">'
-                f'<stop offset="0%" style="stop-color:#2d9e6b"/>'
-                f'<stop offset="100%" style="stop-color:#c8e06a"/>'
-                f'</linearGradient></defs>'
-                f'<text x="{cx}" y="{cy-4}" text-anchor="middle" font-size="18" font-weight="900" fill="#1a7a4a">{pct}%</text>'
-                f'<text x="{cx}" y="{cy+14}" text-anchor="middle" font-size="9" fill="#888">COMPLETADO</text>'
-                f'</svg>'
-            )
 
             # Barra horizontal de progreso tipo Power BI
             bar_pct = f'<div style="height:10px;background:#e0f2e9;border-radius:5px;overflow:hidden;margin-top:8px;">'                       f'<div style="height:10px;width:{pct}%;background:linear-gradient(90deg,#2d9e6b,#c8e06a);border-radius:5px;"></div></div>'
@@ -1042,13 +1062,7 @@ if menu == "📦 Importaciones":
                 + _kpi(total_i, "Total Docs", "Importaciones registradas", "#2d9e6b")
                 + _kpi(arr_i, "Arribados", str(pct)+"% del total", "#3dbb7e", bar_pct)
                 + _kpi(trans_i, "En Tránsito", "Pendientes de llegar", "#e8d44d")
-                + ('<div style="background:#fff;border-radius:14px;border-top:5px solid #c8e06a;'
-                   'padding:20px 22px;box-shadow:0 2px 10px rgba(0,0,0,.07);'
-                   'display:flex;align-items:center;gap:16px;">'
-                   + svg_donut +
-                   '<div><div style="color:#aaa;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Avance</div>'
-                   '<div style="color:#1a7a4a;font-size:1.3rem;font-weight:800;margin-top:4px;">' + str(arr_i) + ' de ' + str(total_i) + ' docs</div>'
-                   '<div style="color:#888;font-size:11.5px;margin-top:2px;">importaciones completadas</div></div></div>')
+                + _kpi(str(pct) + '%', "Avance", str(arr_i) + ' de ' + str(total_i) + ' docs completados', "#c8e06a", bar_pct)
                 + '</div>'
 
                 # ── Fila 2: status bars + tablas ──
