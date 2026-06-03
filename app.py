@@ -1246,139 +1246,55 @@ if menu == "📦 Importaciones":
         # ══════════════════════════════════════════════════════
         # SLIDE 3: Gráficos — Barras comparativo + Línea arrivals
         # ══════════════════════════════════════════════════════
+        # Slide 3: Gráficos — barras por fecha de llegada + barras por importación
         graficos_slide = None
         try:
-            import plotly.io as _pio_g
-            _lp = df_pend["Importación"].tolist() if not df_pend.empty else []
-            _vp = df_pend["ASNs"].tolist()        if not df_pend.empty else []
-            _la = df_arr["Importación"].tolist()  if not df_arr.empty  else []
-            _va = df_arr["ASNs"].tolist()          if not df_arr.empty  else []
-            _all_lbl = list(dict.fromkeys(_lp + _la))
-            _pm = dict(zip(_lp, _vp))
-            _am = dict(zip(_la, _va))
+            import json as _json_g
 
-            _fig_bar_s = go.Figure()
-            _fig_bar_s.add_trace(go.Bar(
-                name="Pendientes", x=_all_lbl,
-                y=[_pm.get(l, 0) for l in _all_lbl],
-                marker_color="#BA7517",
-                text=[_pm.get(l, 0) for l in _all_lbl],
-                textposition="outside", textfont=dict(size=11, color="#BA7517")
-            ))
-            _fig_bar_s.add_trace(go.Bar(
-                name="Arribados", x=_all_lbl,
-                y=[_am.get(l, 0) for l in _all_lbl],
-                marker_color="#1D9E75",
-                text=[_am.get(l, 0) for l in _all_lbl],
-                textposition="outside", textfont=dict(size=11, color="#1D9E75")
-            ))
-            _fig_bar_s.update_layout(
-                barmode="group", height=320,
-                title=dict(text="ASNs por importación: pendientes vs arribados", font=dict(size=14,color="#1a7a4a"), x=0.01),
-                margin=dict(l=10, r=10, t=50, b=50),
-                paper_bgcolor="#ffffff", plot_bgcolor="#ffffff",
-                legend=dict(orientation="h", y=1.12, x=0, font=dict(size=12)),
-                xaxis=dict(tickfont=dict(size=11), showgrid=False),
-                yaxis=dict(gridcolor="#f0faf4", tickfont=dict(size=11)),
-                font=dict(family="Arial,sans-serif")
-            )
-
-            _fig_line_s = None
+            _datos_fecha = []
             if not df_arr.empty and "Fecha Llegada" in df_arr.columns:
-                _df_al = df_arr.copy()
-                _df_al["_f"] = pd.to_datetime(_df_al["Fecha Llegada"], errors="coerce")
-                _df_al = _df_al.dropna(subset=["_f"]).sort_values("_f")
-                if not _df_al.empty:
-                    _fig_line_s = go.Figure()
-                    _fig_line_s.add_trace(go.Scatter(
-                        x=_df_al["Importación"], y=_df_al["ASNs"],
-                        mode="lines+markers+text",
-                        line=dict(color="#1D9E75", width=2.5),
-                        marker=dict(size=9, color="#1D9E75"),
-                        text=_df_al["ASNs"].astype(str),
-                        textposition="top center",
-                        textfont=dict(size=11, color="#1a7a4a"),
-                        fill="tozeroy", fillcolor="rgba(29,158,117,0.08)"
-                    ))
-                    _fig_line_s.update_layout(
-                        height=270,
-                        title=dict(text="Línea de tiempo — ASNs arribados", font=dict(size=14,color="#1a7a4a"), x=0.01),
-                        margin=dict(l=10, r=10, t=50, b=40),
-                        paper_bgcolor="#ffffff", plot_bgcolor="#ffffff",
-                        xaxis=dict(tickfont=dict(size=11), showgrid=False),
-                        yaxis=dict(gridcolor="#f0faf4", tickfont=dict(size=11), visible=False),
-                        font=dict(family="Arial,sans-serif"), showlegend=False
-                    )
+                _df_fch = df_arr.copy()
+                _df_fch["_f"] = pd.to_datetime(_df_fch["Fecha Llegada"], errors="coerce")
+                _df_fch = _df_fch.dropna(subset=["_f"]).sort_values("_f")
+                for _, row in _df_fch.iterrows():
+                    _datos_fecha.append({"x": str(row["Fecha Llegada"]), "y": int(row["ASNs"])})
 
-            # Slide de gráficos: convertir a HTML puro con Plotly embebido
-            # El motor PPT renderiza tipo="html" directamente en el iframe sin procesamiento JS especial
-            import plotly.io as _pio_html
-            _BAR_JSON = _pio_html.to_json(_fig_bar_s)
-            _LINE_JSON = _pio_html.to_json(_fig_line_s) if _fig_line_s else ""
+            _datos_imp = []
+            if not df_arr.empty:
+                for _, row in df_arr.iterrows():
+                    _datos_imp.append({"x": str(row["Importación"]), "y": int(row["ASNs"])})
 
-            _grid_cols = "1fr 1fr" if _LINE_JSON else "1fr"
+            _FECHA_JSON = _json_g.dumps(_datos_fecha)
+            _IMP_JSON   = _json_g.dumps(_datos_imp)
+            _JS_SCRIPT  = "(function(){\n  function renderBar(id, data, color) {\n    var el = document.getElementById(id);\n    if (!el || !data.length) return;\n    var parent = el.parentElement;\n    var W = parent ? parent.offsetWidth  - 32 : 400;\n    var H = parent ? parent.offsetHeight - 50 : 280;\n    if (W < 50) W = 400;\n    if (H < 50) H = 280;\n    var xs = data.map(function(d){ return d.x; });\n    var ys = data.map(function(d){ return d.y; });\n    Plotly.newPlot(id, [{\n      type: 'bar', x: xs, y: ys,\n      marker: { color: color, opacity: 0.85 },\n      text: ys.map(String), textposition: 'outside',\n      textfont: { size: 12, color: '#1a7a4a' },\n      cliponaxis: false\n    }], {\n      autosize: false, width: W, height: H,\n      paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff',\n      margin: { l: 40, r: 20, t: 20, b: 65 },\n      font: { family: 'Arial,sans-serif', size: 11 },\n      xaxis: { showgrid: false, tickfont: { size: 10 }, automargin: true, tickangle: -35 },\n      yaxis: { gridcolor: '#f0faf4', tickfont: { size: 10 }, zeroline: false }\n    }, { displayModeBar: false, responsive: false });\n  }\n  function renderAll() {\n    renderBar('gchart-fecha', _DFECHA, '#1D9E75');\n    renderBar('gchart-imp',   _DIMP,   '#378ADD');\n  }\n  setTimeout(renderAll, 150);\n  setTimeout(renderAll, 700);\n  window.addEventListener('resize', function(){\n    clearTimeout(window._gcrt);\n    window._gcrt = setTimeout(renderAll, 250);\n  });\n})();"
+
             graficos_slide = (
-                '<div style="width:100%;height:100%;padding:16px 22px;background:#f0faf4;'
+                '<div style="width:100%;height:100%;padding:14px 18px;background:#f0faf4;'
                 'font-family:Arial,sans-serif;box-sizing:border-box;'
-                'display:flex;flex-direction:column;gap:14px;overflow:hidden;">'
-                '<div style="display:grid;grid-template-columns:' + _grid_cols + ';gap:16px;flex:1;min-height:0;">'
+                'display:flex;flex-direction:column;gap:12px;overflow:hidden;">'
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:1;min-height:0;">'
 
-                # Panel barras
                 '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
-                'box-shadow:0 2px 10px rgba(0,0,0,.07);display:flex;flex-direction:column;min-height:0;">'
-                '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:10px;flex-shrink:0;">'
-                '📊 ASNs por importación: pendientes vs arribados</div>'
-                '<div id="chart-bar" style="flex:1;min-height:0;"></div>'
+                'box-shadow:0 2px 8px rgba(0,0,0,.07);display:flex;flex-direction:column;min-height:0;">'
+                '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;flex-shrink:0;">'
+                '📅 ASNs arribados por fecha de llegada</div>'
+                '<div id="gchart-fecha" style="flex:1;min-height:0;width:100%;"></div>'
                 '</div>'
 
-                # Panel línea (solo si existe)
-                + (
-                    '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
-                    'box-shadow:0 2px 10px rgba(0,0,0,.07);display:flex;flex-direction:column;min-height:0;">'
-                    '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:10px;flex-shrink:0;">'
-                    '📈 Línea de tiempo — ASNs arribados</div>'
-                    '<div id="chart-line" style="flex:1;min-height:0;"></div>'
-                    '</div>'
-                    if _LINE_JSON else ''
-                )
+                '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
+                'box-shadow:0 2px 8px rgba(0,0,0,.07);display:flex;flex-direction:column;min-height:0;">'
+                '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;flex-shrink:0;">'
+                '📦 ASNs arribados por importación</div>'
+                '<div id="gchart-imp" style="flex:1;min-height:0;width:100%;"></div>'
+                '</div>'
 
-                + '</div></div>'
+                '</div></div>'
                 '<script>'
-                'var _bf=' + _BAR_JSON + ';'
-                + ('var _lf=' + _LINE_JSON + ';' if _LINE_JSON else '')
-                + '''
-(function(){
-  function _sz(id, fig, extra_layout) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    var W = el.offsetWidth || 400, H = el.offsetHeight || 300;
-    var lay = Object.assign({}, fig.layout || {}, {
-      autosize: false, width: W, height: H,
-      paper_bgcolor: "#ffffff", plot_bgcolor: "#ffffff",
-      margin: {l:50,r:20,t:20,b:60},
-      font: {family:"Arial,sans-serif", size:12},
-      legend: {orientation:"h", y:1.08, x:0},
-      xaxis: Object.assign({}, (fig.layout||{}).xaxis||{}, {showgrid:false, tickfont:{size:11}}),
-      yaxis: Object.assign({}, (fig.layout||{}).yaxis||{}, {gridcolor:"#f0faf4", tickfont:{size:11}})
-    }, extra_layout||{});
-    Plotly.newPlot(id, fig.data, lay, {displayModeBar:false, responsive:false});
-  }
-  window.addEventListener('load', function(){
-    _sz('chart-bar', _bf);
-''' + ("    _sz('chart-line', _lf, {yaxis:{visible:false}, margin:{l:20,r:20,t:20,b:60}});" if _LINE_JSON else '') + '''
-  });
-  window.addEventListener('resize', function(){
-    clearTimeout(window._grt);
-    window._grt = setTimeout(function(){
-      _sz('chart-bar', _bf);
-''' + ("      _sz('chart-line', _lf, {yaxis:{visible:false}, margin:{l:20,r:20,t:20,b:60}});" if _LINE_JSON else '') + '''
-    }, 200);
-  });
-})();
-'''
-                + '</script>'
+                'var _DFECHA=' + _FECHA_JSON + ';'
+                'var _DIMP='   + _IMP_JSON   + ';'
+                + _JS_SCRIPT +
+                '</script>'
             )
-            graficos_slide_line = None  # ya incluido en graficos_slide
         except Exception as _eg:
             graficos_slide = None
 
