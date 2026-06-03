@@ -905,21 +905,143 @@ if menu == "📦 Importaciones":
         m3.metric("✅ Arribados", n_arr)
 
         st.divider()
+
+        # ── Función tabla HTML bonita ──────────────────────────────────────
+        def _render_tabla_html(df, tipo="pend"):
+            if df.empty:
+                return ""
+            STATUS_COLORS = {
+                "EN TRÁNSITO": ("#E6F1FB","#185FA5"),
+                "EN TRANSITO": ("#E6F1FB","#185FA5"),
+                "ORIGEN":      ("#FAEEDA","#854F0B"),
+                "SUPPLY":      ("#EEEDFE","#534AB7"),
+                "ADUANAS":     ("#FAEEDA","#BA7517"),
+            }
+            rows_html = ""
+            for i, row in df.iterrows():
+                bg = "#ffffff" if i % 2 == 0 else "#f9fefb"
+                cells = ""
+                for col_name, val in row.items():
+                    val_str = str(val) if str(val) not in ("nan","None","") else "—"
+                    if col_name == "Estado" and val_str.upper() in STATUS_COLORS:
+                        pill_bg, pill_fg = STATUS_COLORS[val_str.upper()]
+                        cells += (f'<td style="padding:9px 14px;border-bottom:1px solid #f0faf4;">'
+                                  f'<span style="background:{pill_bg};color:{pill_fg};padding:3px 10px;'
+                                  f'border-radius:20px;font-size:11.5px;font-weight:600;">{val_str}</span></td>')
+                    elif col_name == "ASNs":
+                        cells += (f'<td style="padding:9px 14px;border-bottom:1px solid #f0faf4;'
+                                  f'text-align:right;font-weight:700;color:#1a7a4a;font-size:13px;">{val_str}</td>')
+                    elif col_name in ("ETA","Fecha ETD","Fecha Llegada"):
+                        cells += (f'<td style="padding:9px 14px;border-bottom:1px solid #f0faf4;'
+                                  f'color:#e8a020;font-weight:600;font-size:12.5px;">'
+                                  f'<span style="display:inline-flex;align-items:center;gap:4px;">📅 {val_str}</span></td>')
+                    else:
+                        cells += (f'<td style="padding:9px 14px;border-bottom:1px solid #f0faf4;'
+                                  f'color:#2d3436;font-size:12.5px;">{val_str}</td>')
+                rows_html += f'<tr style="background:{bg};">{cells}</tr>'
+
+            heads = "".join(
+                f'<th style="padding:10px 14px;background:#1a7a4a;color:#fff;font-size:11.5px;'
+                f'font-weight:700;text-align:left;letter-spacing:0.5px;">{c}</th>'
+                for c in df.columns
+            )
+            return (
+                '<div style="overflow-x:auto;border-radius:10px;border:1px solid #e0f2e9;">'
+                '<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">'
+                f'<thead><tr>{heads}</tr></thead>'
+                f'<tbody>{rows_html}</tbody>'
+                '</table></div>'
+            )
+
+        # ── Gráfico de barras comparativo (Plotly) ─────────────────────────
+        labels_pend = df_pend["Importación"].tolist() if not df_pend.empty else []
+        vals_pend   = df_pend["ASNs"].tolist()        if not df_pend.empty else []
+        labels_arr  = df_arr["Importación"].tolist()  if not df_arr.empty  else []
+        vals_arr    = df_arr["ASNs"].tolist()          if not df_arr.empty  else []
+
+        all_labels = list(dict.fromkeys(labels_pend + labels_arr))
+        pend_map   = dict(zip(labels_pend, vals_pend))
+        arr_map    = dict(zip(labels_arr,  vals_arr))
+
+        fig_bar = go.Figure()
+        fig_bar.add_trace(go.Bar(
+            name="Pendientes", x=all_labels,
+            y=[pend_map.get(l, 0) for l in all_labels],
+            marker_color="#BA7517", text=[pend_map.get(l, 0) for l in all_labels],
+            textposition="outside", textfont=dict(size=11)
+        ))
+        fig_bar.add_trace(go.Bar(
+            name="Arribados", x=all_labels,
+            y=[arr_map.get(l, 0) for l in all_labels],
+            marker_color="#1D9E75", text=[arr_map.get(l, 0) for l in all_labels],
+            textposition="outside", textfont=dict(size=11)
+        ))
+        fig_bar.update_layout(
+            barmode="group", height=260,
+            margin=dict(l=10, r=10, t=30, b=40),
+            paper_bgcolor="white", plot_bgcolor="white",
+            legend=dict(orientation="h", y=1.12, x=0),
+            xaxis=dict(tickfont=dict(size=11), showgrid=False),
+            yaxis=dict(gridcolor="#f0faf4", tickfont=dict(size=11)),
+            font=dict(family="Arial")
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+        # ── Línea de tiempo de arribos ──────────────────────────────────────
+        if not df_arr.empty and "Fecha Llegada" in df_arr.columns:
+            df_arr_line = df_arr.copy()
+            df_arr_line["_fch"] = pd.to_datetime(df_arr_line["Fecha Llegada"], errors="coerce")
+            df_arr_line = df_arr_line.dropna(subset=["_fch"]).sort_values("_fch")
+            if not df_arr_line.empty:
+                fig_line = go.Figure()
+                fig_line.add_trace(go.Scatter(
+                    x=df_arr_line["Importación"], y=df_arr_line["ASNs"],
+                    mode="lines+markers+text",
+                    line=dict(color="#1D9E75", width=2.5),
+                    marker=dict(size=8, color="#1D9E75"),
+                    text=df_arr_line["ASNs"].astype(str),
+                    textposition="top center",
+                    textfont=dict(size=11, color="#1a7a4a"),
+                    fill="tozeroy", fillcolor="rgba(29,158,117,0.08)"
+                ))
+                fig_line.update_layout(
+                    height=220, title=dict(text="ASNs arribados por importación", font=dict(size=13), x=0),
+                    margin=dict(l=10, r=10, t=40, b=30),
+                    paper_bgcolor="white", plot_bgcolor="white",
+                    xaxis=dict(tickfont=dict(size=11), showgrid=False),
+                    yaxis=dict(gridcolor="#f0faf4", tickfont=dict(size=11), visible=False),
+                    font=dict(family="Arial"), showlegend=False
+                )
+                st.plotly_chart(fig_line, use_container_width=True)
+
+        # ── Tablas HTML estilizadas ────────────────────────────────────────
         c1, c2 = st.columns(2)
 
         with c1:
-            st.markdown("### ⏳ Pendientes de Arribo")
-            st.caption("En consolidado y sin registro en Recepción aún")
+            n_pend_asn = int(df_pend["ASNs"].sum()) if not df_pend.empty and "ASNs" in df_pend.columns else 0
+            st.markdown(
+                f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+                f'<span style="font-size:15px;font-weight:700;color:#1a7a4a;">⏳ Pendientes de Arribo</span>'
+                f'<span style="background:#FAEEDA;color:#854F0B;padding:3px 12px;border-radius:20px;'
+                f'font-size:12px;font-weight:600;">{len(df_pend)} importaciones · {n_pend_asn} ASNs</span></div>',
+                unsafe_allow_html=True
+            )
             if not df_pend.empty:
-                st.dataframe(df_pend, use_container_width=True, hide_index=True)
+                st.markdown(_render_tabla_html(df_pend, "pend"), unsafe_allow_html=True)
             else:
                 st.success("✅ No hay importaciones pendientes.")
 
         with c2:
-            st.markdown("### ✅ Arribados")
-            st.caption("Con registro en Recepción Importaciones")
+            n_arr_asn = int(df_arr["ASNs"].sum()) if not df_arr.empty and "ASNs" in df_arr.columns else 0
+            st.markdown(
+                f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+                f'<span style="font-size:15px;font-weight:700;color:#1a7a4a;">✅ Arribados</span>'
+                f'<span style="background:#EAF3DE;color:#3B6D11;padding:3px 12px;border-radius:20px;'
+                f'font-size:12px;font-weight:600;">{len(df_arr)} importaciones · {n_arr_asn} ASNs</span></div>',
+                unsafe_allow_html=True
+            )
             if not df_arr.empty:
-                st.dataframe(df_arr, use_container_width=True, hide_index=True)
+                st.markdown(_render_tabla_html(df_arr, "arr"), unsafe_allow_html=True)
             else:
                 st.info("Sin registros de recepción aún.")
 
@@ -1002,24 +1124,46 @@ if menu == "📦 Importaciones":
             df_arr2 = df_arr2.sort_values("_f", ascending=False, na_position="last").drop(columns=["_f"])
             df_arr2 = df_arr2[df_arr2.apply(lambda row: any(str(v).strip() not in ('','nan','None') for v in row), axis=1)]
 
-            # Tabla HTML
+            # Tabla HTML con estilo amigable (pills, colores alternos, ETA resaltada)
+            _STATUS_PILLS = {
+                "EN TRÁNSITO": ("#E6F1FB","#185FA5"),
+                "EN TRANSITO": ("#E6F1FB","#185FA5"),
+                "ORIGEN":      ("#FAEEDA","#854F0B"),
+                "SUPPLY":      ("#EEEDFE","#534AB7"),
+                "ADUANAS":     ("#FAEEDA","#BA7517"),
+            }
             def _tbl(df, mx=20):
                 df = df.head(mx)
                 heads = "".join(
-                    '<th style="padding:9px 12px;background:#2d9e6b;color:#fff;font-size:12.5px;'
-                    'font-weight:700;text-align:left;position:sticky;top:0;z-index:1;">' + str(c) + '</th>'
+                    '<th style="padding:9px 14px;background:#1a7a4a;color:#fff;font-size:11.5px;'
+                    'font-weight:700;text-align:left;letter-spacing:0.5px;position:sticky;top:0;z-index:1;">' + str(c) + '</th>'
                     for c in df.columns
                 )
-                rows = "".join(
-                    '<tr>' + "".join(
-                        '<td style="padding:8px 12px;border-bottom:1px solid #f0faf4;'
-                        'font-size:12.5px;color:#2d3436;">' + str(v) + '</td>'
-                        for v in r
-                    ) + '</tr>' for r in df.values
-                )
-                return ('<table style="width:100%;border-collapse:collapse;">'
+                rows_html = ""
+                for i, r in enumerate(df.values):
+                    bg = "#ffffff" if i % 2 == 0 else "#f9fefb"
+                    cells = ""
+                    for ci, v in enumerate(r):
+                        col_name = df.columns[ci]
+                        val_str = str(v) if str(v) not in ("nan","None","") else "—"
+                        if col_name == "STATUS" and val_str.upper() in _STATUS_PILLS:
+                            pb, pf = _STATUS_PILLS[val_str.upper()]
+                            cells += ('<td style="padding:8px 14px;border-bottom:1px solid #f0faf4;">'
+                                      '<span style="background:' + pb + ';color:' + pf + ';padding:3px 10px;'
+                                      'border-radius:20px;font-size:11px;font-weight:600;">' + val_str + '</span></td>')
+                        elif col_name == "ASNs":
+                            cells += ('<td style="padding:8px 14px;border-bottom:1px solid #f0faf4;'
+                                      'text-align:right;font-weight:700;color:#1a7a4a;font-size:13px;">' + val_str + '</td>')
+                        elif col_name in ("ETA", "HORA FECH", "FCH LLEGADA", "Fecha Llegada", "Fecha ETD"):
+                            cells += ('<td style="padding:8px 14px;border-bottom:1px solid #f0faf4;'
+                                      'color:#e8a020;font-weight:600;font-size:12px;">📅 ' + val_str + '</td>')
+                        else:
+                            cells += ('<td style="padding:8px 14px;border-bottom:1px solid #f0faf4;'
+                                      'color:#2d3436;font-size:12px;">' + val_str + '</td>')
+                    rows_html += '<tr style="background:' + bg + ';">' + cells + '</tr>'
+                return ('<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">'
                         '<thead><tr>' + heads + '</tr></thead>'
-                        '<tbody>' + rows + '</tbody></table>')
+                        '<tbody>' + rows_html + '</tbody></table>')
 
             # Barra horizontal de progreso tipo Power BI
             bar_pct = f'<div style="height:10px;background:#e0f2e9;border-radius:5px;overflow:hidden;margin-top:8px;">'                       f'<div style="height:10px;width:{pct}%;background:linear-gradient(90deg,#2d9e6b,#c8e06a);border-radius:5px;"></div></div>'
@@ -1099,11 +1243,89 @@ if menu == "📦 Importaciones":
                 + '</div>'  # wrap
             )
 
+        # ══════════════════════════════════════════════════════
+        # SLIDE 3: Gráficos — Barras comparativo + Línea arrivals
+        # ══════════════════════════════════════════════════════
+        graficos_slide = None
+        try:
+            import plotly.io as _pio_g
+            _lp = df_pend["Importación"].tolist() if not df_pend.empty else []
+            _vp = df_pend["ASNs"].tolist()        if not df_pend.empty else []
+            _la = df_arr["Importación"].tolist()  if not df_arr.empty  else []
+            _va = df_arr["ASNs"].tolist()          if not df_arr.empty  else []
+            _all_lbl = list(dict.fromkeys(_lp + _la))
+            _pm = dict(zip(_lp, _vp))
+            _am = dict(zip(_la, _va))
+
+            _fig_bar_s = go.Figure()
+            _fig_bar_s.add_trace(go.Bar(
+                name="Pendientes", x=_all_lbl,
+                y=[_pm.get(l, 0) for l in _all_lbl],
+                marker_color="#BA7517",
+                text=[_pm.get(l, 0) for l in _all_lbl],
+                textposition="outside", textfont=dict(size=11, color="#BA7517")
+            ))
+            _fig_bar_s.add_trace(go.Bar(
+                name="Arribados", x=_all_lbl,
+                y=[_am.get(l, 0) for l in _all_lbl],
+                marker_color="#1D9E75",
+                text=[_am.get(l, 0) for l in _all_lbl],
+                textposition="outside", textfont=dict(size=11, color="#1D9E75")
+            ))
+            _fig_bar_s.update_layout(
+                barmode="group", height=320,
+                title=dict(text="ASNs por importación: pendientes vs arribados", font=dict(size=14,color="#1a7a4a"), x=0.01),
+                margin=dict(l=10, r=10, t=50, b=50),
+                paper_bgcolor="#ffffff", plot_bgcolor="#ffffff",
+                legend=dict(orientation="h", y=1.12, x=0, font=dict(size=12)),
+                xaxis=dict(tickfont=dict(size=11), showgrid=False),
+                yaxis=dict(gridcolor="#f0faf4", tickfont=dict(size=11)),
+                font=dict(family="Arial,sans-serif")
+            )
+
+            _fig_line_s = None
+            if not df_arr.empty and "Fecha Llegada" in df_arr.columns:
+                _df_al = df_arr.copy()
+                _df_al["_f"] = pd.to_datetime(_df_al["Fecha Llegada"], errors="coerce")
+                _df_al = _df_al.dropna(subset=["_f"]).sort_values("_f")
+                if not _df_al.empty:
+                    _fig_line_s = go.Figure()
+                    _fig_line_s.add_trace(go.Scatter(
+                        x=_df_al["Importación"], y=_df_al["ASNs"],
+                        mode="lines+markers+text",
+                        line=dict(color="#1D9E75", width=2.5),
+                        marker=dict(size=9, color="#1D9E75"),
+                        text=_df_al["ASNs"].astype(str),
+                        textposition="top center",
+                        textfont=dict(size=11, color="#1a7a4a"),
+                        fill="tozeroy", fillcolor="rgba(29,158,117,0.08)"
+                    ))
+                    _fig_line_s.update_layout(
+                        height=270,
+                        title=dict(text="Línea de tiempo — ASNs arribados", font=dict(size=14,color="#1a7a4a"), x=0.01),
+                        margin=dict(l=10, r=10, t=50, b=40),
+                        paper_bgcolor="#ffffff", plot_bgcolor="#ffffff",
+                        xaxis=dict(tickfont=dict(size=11), showgrid=False),
+                        yaxis=dict(gridcolor="#f0faf4", tickfont=dict(size=11), visible=False),
+                        font=dict(family="Arial,sans-serif"), showlegend=False
+                    )
+
+            # Slide de gráficos: se pasan como figuras Plotly (el motor PPT las renderiza igual que los otros slides)
+            # Usamos una lista de sub-slides: uno para barras, uno para línea
+            graficos_slide = _fig_bar_s  # barra comparativa como slide Plotly
+            graficos_slide_line = _fig_line_s  # línea de arrivals
+        except Exception as _eg:
+            graficos_slide = None
+
         slides_imp = []
         if apertura_slide:
             slides_imp.append(("🏪 Próximas Aperturas", apertura_slide))
         if status_slide:
             slides_imp.append(("📋 Status Global Importaciones", status_slide))
+        if graficos_slide:
+            slides_imp.append(("📊 ASNs: Pendientes vs Arribados", graficos_slide))
+        if 'graficos_slide_line' in dir() and graficos_slide_line:
+            slides_imp.append(("📈 Línea de tiempo — Arrivals", graficos_slide_line))
 
         if slides_imp:
             mostrar_seccion_ppt("📦 Importaciones", slides_imp)
