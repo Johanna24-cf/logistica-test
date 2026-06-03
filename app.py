@@ -1113,176 +1113,22 @@ if menu == "📦 Importaciones":
             )
 
         # ══════════════════════════════════════════════════════
-        # SLIDE 2: Status Global — Power BI style
+        # SLIDE 2: Dashboard completo — métricas + gráficos + tablas
+        # Replica exactamente la vista del dashboard en Streamlit
         # ══════════════════════════════════════════════════════
         status_slide = ""
-        if not df_import.empty and all(c in df_import.columns for c in ["NOMBRE CORREO","STATUS","HORA FECH","FCH LLEGADA"]):
-            total_i = df_import["NOMBRE CORREO"].nunique()
-            arr_i   = df_import[df_import["STATUS"]=="ARRIBADO"]["NOMBRE CORREO"].nunique()
-            trans_i = total_i - arr_i
-            pct     = int(arr_i / total_i * 100) if total_i else 0
-
-            # Pendientes slide: excluir pares (importacion+ASN) ya en recepción
-            _col_eta2 = next((c for c in df_import.columns if c.upper() == "ETA"), None)
-            if not df_recep.empty and "IMPORTACION" in df_recep.columns and "ASN" in df_recep.columns and "ASN" in df_import.columns:
-                _pares2 = set(zip(
-                    df_recep["IMPORTACION"].astype(str).str.strip().str.lower(),
-                    df_recep["ASN"].astype(str).str.strip().str.lower()
-                ))
-                _par_keys2 = list(zip(
-                    df_import["NOMBRE CORREO"].astype(str).str.strip().str.lower(),
-                    df_import["ASN"].astype(str).str.strip().str.lower()
-                ))
-                _mask2 = [p not in _pares2 for p in _par_keys2]
-                _df_imp_pend2 = df_import[_mask2].copy()
-            else:
-                _df_imp_pend2 = df_import[df_import["STATUS"] != "ARRIBADO"].copy()
-
-            _grp2 = ["NOMBRE CORREO", "HORA FECH", "STATUS"]
-            if _col_eta2:
-                _grp2.append(_col_eta2)
-            df_pend2 = _df_imp_pend2.groupby(_grp2).size().reset_index(name="ASNs")
-            if _col_eta2 and _col_eta2 != "ETA":
-                df_pend2 = df_pend2.rename(columns={_col_eta2: "ETA"})
-            orden_s  = {"ADUANAS":0,"EN TRÁNSITO":1,"EN TRANSITO":1,"ORIGEN":2}
-            df_pend2["_o"] = df_pend2["STATUS"].str.upper().str.strip().map(orden_s).fillna(
-                df_pend2["STATUS"].apply(lambda s: 99 if str(s).strip()=="" else 3))
-            df_pend2 = df_pend2.sort_values("_o").drop(columns=["_o"])
-            df_pend2 = df_pend2[df_pend2.apply(lambda row: any(str(v).strip() not in ('','nan','None') for v in row), axis=1)]
-
-            df_arr2 = df_import[df_import["STATUS"]=="ARRIBADO"].groupby(["NOMBRE CORREO","FCH LLEGADA"]).size().reset_index(name="ASNs")
-            df_arr2["_f"] = pd.to_datetime(df_arr2["FCH LLEGADA"], errors="coerce")
-            df_arr2 = df_arr2.sort_values("_f", ascending=False, na_position="last").drop(columns=["_f"])
-            df_arr2 = df_arr2[df_arr2.apply(lambda row: any(str(v).strip() not in ('','nan','None') for v in row), axis=1)]
-
-            # Tabla HTML con estilo amigable (pills, colores alternos, ETA resaltada)
-            _STATUS_PILLS = {
-                "EN TRÁNSITO": ("#E6F1FB","#185FA5"),
-                "EN TRANSITO": ("#E6F1FB","#185FA5"),
-                "ORIGEN":      ("#FAEEDA","#854F0B"),
-                "SUPPLY":      ("#EEEDFE","#534AB7"),
-                "ADUANAS":     ("#FAEEDA","#BA7517"),
-            }
-            def _tbl(df, mx=20):
-                df = df.head(mx)
-                heads = "".join(
-                    '<th style="padding:9px 14px;background:#1a7a4a;color:#fff;font-size:11.5px;'
-                    'font-weight:700;text-align:left;letter-spacing:0.5px;position:sticky;top:0;z-index:1;">' + str(c) + '</th>'
-                    for c in df.columns
-                )
-                rows_html = ""
-                for i, r in enumerate(df.values):
-                    bg = "#ffffff" if i % 2 == 0 else "#f9fefb"
-                    cells = ""
-                    for ci, v in enumerate(r):
-                        col_name = df.columns[ci]
-                        val_str = str(v) if str(v) not in ("nan","None","") else "—"
-                        if col_name == "STATUS" and val_str.upper() in _STATUS_PILLS:
-                            pb, pf = _STATUS_PILLS[val_str.upper()]
-                            cells += ('<td style="padding:8px 14px;border-bottom:1px solid #f0faf4;">'
-                                      '<span style="background:' + pb + ';color:' + pf + ';padding:3px 10px;'
-                                      'border-radius:20px;font-size:11px;font-weight:600;">' + val_str + '</span></td>')
-                        elif col_name == "ASNs":
-                            cells += ('<td style="padding:8px 14px;border-bottom:1px solid #f0faf4;'
-                                      'text-align:right;font-weight:700;color:#1a7a4a;font-size:13px;">' + val_str + '</td>')
-                        elif col_name in ("ETA", "HORA FECH", "FCH LLEGADA", "Fecha Llegada", "Fecha ETD"):
-                            cells += ('<td style="padding:8px 14px;border-bottom:1px solid #f0faf4;'
-                                      'color:#e8a020;font-weight:600;font-size:12px;">📅 ' + val_str + '</td>')
-                        else:
-                            cells += ('<td style="padding:8px 14px;border-bottom:1px solid #f0faf4;'
-                                      'color:#2d3436;font-size:12px;">' + val_str + '</td>')
-                    rows_html += '<tr style="background:' + bg + ';">' + cells + '</tr>'
-                return ('<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">'
-                        '<thead><tr>' + heads + '</tr></thead>'
-                        '<tbody>' + rows_html + '</tbody></table>')
-
-            # Barra horizontal de progreso tipo Power BI
-            bar_pct = f'<div style="height:10px;background:#e0f2e9;border-radius:5px;overflow:hidden;margin-top:8px;">'                       f'<div style="height:10px;width:{pct}%;background:linear-gradient(90deg,#2d9e6b,#c8e06a);border-radius:5px;"></div></div>'
-
-            # KPI card
-            def _kpi(val, label, sublabel, border_color, extra=""):
-                return (
-                    '<div style="background:#fff;border-radius:14px;border-top:5px solid ' + border_color + ';'
-                    'padding:20px 22px;box-shadow:0 2px 10px rgba(0,0,0,.07);display:flex;flex-direction:column;justify-content:center;">'
-                    '<div style="color:#aaa;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">' + label + '</div>'
-                    '<div style="color:#1a7a4a;font-size:2.8rem;font-weight:900;line-height:1.0;margin:4px 0;">' + str(val) + '</div>'
-                    '<div style="color:#888;font-size:11.5px;">' + sublabel + '</div>'
-                    + extra + '</div>'
-                )
-
-            # Status bar chart por status (pendientes)
-            status_counts = df_import[df_import["STATUS"]!="ARRIBADO"]["STATUS"].value_counts()
-            bar_items = ""
-            colors_map = {"ADUANAS":"#e8a020","EN TRÁNSITO":"#3dbb7e","ORIGEN":"#6c8ebf","":"#ccc"}
-            max_val = status_counts.max() if len(status_counts) else 1
-            for st, cnt in status_counts.items():
-                color = colors_map.get(str(st).upper(), "#aaa")
-                w = int(cnt / max_val * 100)
-                bar_items += (
-                    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
-                    '<div style="width:100px;font-size:12px;color:#555;font-weight:600;text-align:right;">' + str(st) + '</div>'
-                    '<div style="flex:1;height:28px;background:#f5f5f5;border-radius:6px;overflow:hidden;">'
-                    '<div style="height:28px;width:' + str(w) + '%;background:' + color + ';border-radius:6px;'
-                    'display:flex;align-items:center;padding-left:10px;">'
-                    '<span style="color:#fff;font-size:12px;font-weight:700;">' + str(cnt) + '</span></div></div></div>'
-                )
-
-            status_slide = (
-                '<div style="width:100%;height:100%;padding:16px 22px;'
-                'background:linear-gradient(135deg,#f0faf4,#e8f5ee);'
-                'font-family:Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;overflow:hidden;">'
-
-                # ── Fila 1: 4 KPIs ──
-                '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;flex-shrink:0;">'
-                + _kpi(total_i, "Total Docs", "Importaciones registradas", "#2d9e6b")
-                + _kpi(arr_i, "Arribados", str(pct)+"% del total", "#3dbb7e", bar_pct)
-                + _kpi(trans_i, "En Tránsito", "Pendientes de llegar", "#e8d44d")
-                + _kpi(str(pct) + '%', "Avance", str(arr_i) + ' de ' + str(total_i) + ' docs completados', "#c8e06a", bar_pct)
-                + '</div>'
-
-                # ── Fila 2: status bars + tablas ──
-                '<div style="display:grid;grid-template-columns:300px 1fr 1fr;gap:12px;flex:1;min-height:0;">'
-
-                # Status bars (col 1)
-                + '<div style="background:#fff;border-radius:14px;padding:16px 18px;'
-                'box-shadow:0 2px 10px rgba(0,0,0,.07);display:flex;flex-direction:column;">'
-                '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:14px;">📊 Status Pendientes</div>'
-                + bar_items +
-                '</div>'
-
-                # Tabla Pendientes (col 2)
-                + '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
-                'box-shadow:0 2px 10px rgba(0,0,0,.07);display:flex;flex-direction:column;">'
-                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-shrink:0;">'
-                '<span style="font-size:14px;font-weight:700;color:#1a7a4a;">⏳ Pendientes</span>'
-                '<span style="background:#e8a020;color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;">'
-                + str(len(df_pend2)) + ' docs</span></div>'
-                '<div style="overflow-y:auto;flex:1;">' + _tbl(df_pend2) + '</div>'
-                '</div>'
-
-                # Tabla Arribados (col 3)
-                + '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
-                'box-shadow:0 2px 10px rgba(0,0,0,.07);display:flex;flex-direction:column;">'
-                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-shrink:0;">'
-                '<span style="font-size:14px;font-weight:700;color:#1a7a4a;">✅ Arribados</span>'
-                '<span style="background:#2d9e6b;color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;">'
-                + str(len(df_arr2)) + ' docs</span></div>'
-                '<div style="overflow-y:auto;flex:1;">' + _tbl(df_arr2) + '</div>'
-                '</div>'
-
-                + '</div>'  # fila 2
-                + '</div>'  # wrap
-            )
-
-        # Slide 3: gráficos embebidos como tipo "plotly_multi" usando HTML con data attrs
-        # Estrategia: pasar los datos en el propio HTML como atributos data-* y
-        # renderizarlos con el Plotly que YA está cargado en el template padre.
-        # Se usa tipo "html" pero el JS del template detecta divs con data-chart
-        # y los renderiza con Plotly directamente — sin <script> que innerHTML ignora.
         graficos_slide = None
         try:
-            import json as _json_g
+            import json as _json_g, html as _html_esc
 
+            # ── Datos de métricas ──
+            total_i = df_import["NOMBRE CORREO"].nunique() if not df_import.empty else 0
+            n_pend_i = len(df_pend) if not df_pend.empty else 0
+            n_arr_i  = len(df_arr)  if not df_arr.empty  else 0
+            n_pend_asn_i = int(df_pend["ASNs"].sum()) if not df_pend.empty and "ASNs" in df_pend.columns else 0
+            n_arr_asn_i  = int(df_arr["ASNs"].sum())  if not df_arr.empty  and "ASNs" in df_arr.columns  else 0
+
+            # ── Datos para gráfico 1: por fecha ──
             _datos_fecha = []
             if not df_arr.empty and "Fecha Llegada" in df_arr.columns:
                 _df_fch = df_arr.copy()
@@ -1291,50 +1137,121 @@ if menu == "📦 Importaciones":
                 for _, row in _df_fch.iterrows():
                     _datos_fecha.append({"x": str(row["Fecha Llegada"]), "y": int(row["ASNs"])})
 
+            # ── Datos para gráfico 2: por importación ──
             _datos_imp = []
             if not df_arr.empty:
                 for _, row in df_arr.iterrows():
                     _datos_imp.append({"x": str(row["Importación"]), "y": int(row["ASNs"])})
 
-            # Serializar como atributos HTML data-* (escaped para HTML)
-            import html as _html_esc
             _FECHA_ATTR = _html_esc.escape(_json_g.dumps(_datos_fecha), quote=True)
             _IMP_ATTR   = _html_esc.escape(_json_g.dumps(_datos_imp),   quote=True)
 
-            graficos_slide = (
-                '<div style="width:100%;height:100%;padding:14px 18px;background:#f0faf4;'
+            # ── Tablas HTML (reutiliza _tbl del bloque anterior si existe, sino define inline) ──
+            _SP = {
+                "EN TRÁNSITO": ("#E6F1FB","#185FA5"), "EN TRANSITO": ("#E6F1FB","#185FA5"),
+                "ORIGEN": ("#FAEEDA","#854F0B"), "SUPPLY": ("#EEEDFE","#534AB7"),
+                "ADUANAS": ("#FAEEDA","#BA7517"),
+            }
+            def _tbl2(df, mx=15):
+                df = df.head(mx)
+                heads = "".join(
+                    '<th style="padding:7px 12px;background:#1a7a4a;color:#fff;font-size:11px;'
+                    'font-weight:700;text-align:left;position:sticky;top:0;z-index:1;">' + str(c) + '</th>'
+                    for c in df.columns
+                )
+                rows_html = ""
+                for i, r in enumerate(df.values):
+                    bg = "#ffffff" if i % 2 == 0 else "#f9fefb"
+                    cells = ""
+                    for ci, v in enumerate(r):
+                        cn = df.columns[ci]
+                        vs = str(v) if str(v) not in ("nan","None","") else "—"
+                        if cn == "Estado" and vs.upper() in _SP:
+                            pb,pf = _SP[vs.upper()]
+                            cells += ('<td style="padding:6px 12px;border-bottom:1px solid #f0faf4;">'
+                                      '<span style="background:'+pb+';color:'+pf+';padding:2px 8px;'
+                                      'border-radius:20px;font-size:10px;font-weight:600;">'+vs+'</span></td>')
+                        elif cn == "ASNs":
+                            cells += ('<td style="padding:6px 12px;border-bottom:1px solid #f0faf4;'
+                                      'text-align:right;font-weight:700;color:#1a7a4a;font-size:12px;">'+vs+'</td>')
+                        elif cn in ("ETA","Fecha ETD","Fecha Llegada","FCH LLEGADA","HORA FECH"):
+                            cells += ('<td style="padding:6px 12px;border-bottom:1px solid #f0faf4;'
+                                      'color:#e8a020;font-weight:600;font-size:11px;">📅 '+vs+'</td>')
+                        else:
+                            cells += ('<td style="padding:6px 12px;border-bottom:1px solid #f0faf4;'
+                                      'color:#2d3436;font-size:11px;">'+vs+'</td>')
+                    rows_html += '<tr style="background:'+bg+';">'+cells+'</tr>'
+                return ('<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">'
+                        '<thead><tr>'+heads+'</tr></thead>'
+                        '<tbody>'+rows_html+'</tbody></table>')
+
+            _tbl_pend = _tbl2(df_pend) if not df_pend.empty else '<p style="color:#888;font-size:12px;padding:10px;">Sin pendientes</p>'
+            _tbl_arr  = _tbl2(df_arr)  if not df_arr.empty  else '<p style="color:#888;font-size:12px;padding:10px;">Sin datos</p>'
+
+            status_slide = (
+                '<div style="width:100%;height:100%;padding:12px 18px;background:#f0faf4;'
                 'font-family:Arial,sans-serif;box-sizing:border-box;'
-                'display:flex;flex-direction:column;gap:12px;overflow:hidden;">'
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:1;min-height:0;">'
+                'display:flex;flex-direction:column;gap:10px;overflow:hidden;">'
 
-                '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
-                'box-shadow:0 2px 8px rgba(0,0,0,.07);display:flex;flex-direction:column;min-height:0;">'
-                '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;flex-shrink:0;">'
-                '📅 ASNs por fecha de llegada</div>'
-                '<div id="gchart-fecha" data-chart="bar" data-color="#1D9E75" '
-                'data-points="' + _FECHA_ATTR + '" style="flex:1;min-height:0;width:100%;"></div>'
+                # ── Fila 1: 3 métricas ──
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;flex-shrink:0;">'
+                + '<div style="background:#fff;border-radius:12px;border-top:4px solid #2d9e6b;padding:12px 16px;">'
+                  '<div style="color:#aaa;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Total Importaciones</div>'
+                  '<div style="color:#1a7a4a;font-size:2.2rem;font-weight:900;line-height:1.1;">'+str(total_i)+'</div>'
+                  '</div>'
+                + '<div style="background:#fff;border-radius:12px;border-top:4px solid #e8a020;padding:12px 16px;">'
+                  '<div style="color:#aaa;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Pendientes de Arribo</div>'
+                  '<div style="color:#e8a020;font-size:2.2rem;font-weight:900;line-height:1.1;">'+str(n_pend_i)+'</div>'
+                  '<div style="color:#aaa;font-size:10px;">'+str(n_pend_asn_i)+' ASNs</div>'
+                  '</div>'
+                + '<div style="background:#fff;border-radius:12px;border-top:4px solid #1D9E75;padding:12px 16px;">'
+                  '<div style="color:#aaa;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">Arribados</div>'
+                  '<div style="color:#1D9E75;font-size:2.2rem;font-weight:900;line-height:1.1;">'+str(n_arr_i)+'</div>'
+                  '<div style="color:#aaa;font-size:10px;">'+str(n_arr_asn_i)+' ASNs</div>'
+                  '</div>'
+                + '</div>'
+
+                # ── Fila 2: 2 gráficos con data-chart ──
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;flex-shrink:0;height:220px;">'
+                '<div style="background:#fff;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;">'
+                '<div style="font-size:11px;font-weight:700;color:#1a7a4a;margin-bottom:6px;flex-shrink:0;">📅 ASNs por fecha de llegada</div>'
+                '<div id="ppt-gchart-fecha" data-chart="bar" data-color="#1D9E75" data-points="'+_FECHA_ATTR+'" style="flex:1;min-height:0;"></div>'
+                '</div>'
+                '<div style="background:#fff;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;">'
+                '<div style="font-size:11px;font-weight:700;color:#1a7a4a;margin-bottom:6px;flex-shrink:0;">📦 ASNs por importación</div>'
+                '<div id="ppt-gchart-imp" data-chart="bar" data-color="#378ADD" data-points="'+_IMP_ATTR+'" style="flex:1;min-height:0;"></div>'
+                '</div>'
                 '</div>'
 
-                '<div style="background:#fff;border-radius:14px;padding:14px 16px;'
-                'box-shadow:0 2px 8px rgba(0,0,0,.07);display:flex;flex-direction:column;min-height:0;">'
-                '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;flex-shrink:0;">'
-                '📦 ASNs por importación</div>'
-                '<div id="gchart-imp" data-chart="bar" data-color="#378ADD" '
-                'data-points="' + _IMP_ATTR + '" style="flex:1;min-height:0;width:100%;"></div>'
+                # ── Fila 3: 2 tablas ──
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:0;">'
+                '<div style="background:#fff;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;min-height:0;">'
+                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-shrink:0;">'
+                '<span style="font-size:12px;font-weight:700;color:#1a7a4a;">⏳ Pendientes de Arribo</span>'
+                '<span style="background:#FAEEDA;color:#854F0B;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;">'
+                +str(n_pend_i)+' importaciones · '+str(n_pend_asn_i)+' ASNs</span></div>'
+                '<div style="overflow-y:auto;flex:1;">'+_tbl_pend+'</div>'
+                '</div>'
+                '<div style="background:#fff;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;min-height:0;">'
+                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-shrink:0;">'
+                '<span style="font-size:12px;font-weight:700;color:#1a7a4a;">✅ Arribados</span>'
+                '<span style="background:#EAF3DE;color:#3B6D11;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;">'
+                +str(n_arr_i)+' importaciones · '+str(n_arr_asn_i)+' ASNs</span></div>'
+                '<div style="overflow-y:auto;flex:1;">'+_tbl_arr+'</div>'
+                '</div>'
                 '</div>'
 
-                '</div></div>'
+                '</div>'  # wrap
             )
-        except Exception as _eg:
-            graficos_slide = None
+
+        except Exception as _eg_s:
+            status_slide = ""
 
         slides_imp = []
         if apertura_slide:
             slides_imp.append(("🏪 Próximas Aperturas", apertura_slide))
         if status_slide:
-            slides_imp.append(("📋 Status Global Importaciones", status_slide))
-        if graficos_slide:
-            slides_imp.append(("📊 Gráficos de Importaciones", graficos_slide))
+            slides_imp.append(("📊 Status Global Importaciones", status_slide))
 
         if slides_imp:
             mostrar_seccion_ppt("📦 Importaciones", slides_imp)
