@@ -199,9 +199,9 @@ client = conectar_google()
 # ── ID Sheet Historial Carcasa ─────────────────────────────────────────────
 SHEET_ID_HIST_CARCASA = "1x0jVDMYk9htwttNcpXlXeaQcR0ELoBYeF4iP2qYcs1s"
 
-@st.cache_data(ttl=300)
+#@st.cache_data(ttl=300)
 def cargar_historial_carcasa():
-    import re, pandas as pd
+    import re, pandas as pd 
     try:
         sh = client.open_by_key(SHEET_ID_HIST_CARCASA)
         hojas = [ws.title for ws in sh.worksheets()]
@@ -230,7 +230,7 @@ def cargar_historial_carcasa():
             df["Diferencia"] = pd.to_numeric(df["Diferencia"], errors="coerce")
         return df
     except Exception as e:
-        st.error(f"Error cargando historial Carcasa: {e}")
+        st.error(f"Error cargando historial Carcasa: {type(e).__name__}: {str(e)}")
         return pd.DataFrame()
 
 def abrir_archivo_dinamico(nombre_o_id):
