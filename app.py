@@ -196,6 +196,52 @@ def conectar_google():
 
 client = conectar_google()
 
+# ── ID Sheet Historial Carcasa ─────────────────────────────────────────────
+SHEET_ID_HIST_CARCASA = "1x0jVDMYk9htwttNcpXlXeaQcR0ELoBYeF4iP2qYcs1s"
+
+@st.cache_data(ttl=300)
+def cargar_historial_carcasa():
+    """Lee todas las pestañas HIST_AAAA_MM del Sheet historial Carcasa."""
+    try:
+        import gspread, re
+        from google.oauth2 import service_account
+        creds = service_account.Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
+            scopes=[
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive.readonly",
+            ],
+        )
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_key(SHEET_ID_HIST_CARCASA)
+        frames = []
+        for ws in sh.worksheets():
+            if re.match(r"HIST_\d{4}_\d{2}", ws.title):
+                data = ws.get_all_records()
+                if data:
+                    import pandas as pd
+                    df = pd.DataFrame(data)
+                    df["_sheet"] = ws.title
+                    frames.append(df)
+        if not frames:
+            return pd.DataFrame()
+        df = pd.concat(frames, ignore_index=True)
+        df.columns = [c.strip() for c in df.columns]
+        if "Fecha" in df.columns:
+            df["Fecha"] = pd.to_datetime(df["Fecha"], dayfirst=True, errors="coerce")
+        if "Código SKU" in df.columns:
+            df["Código SKU"] = df["Código SKU"].astype(str).str.lstrip("'").str.strip()
+        if "Stock WMS" in df.columns:
+            df["Stock WMS"] = pd.to_numeric(df["Stock WMS"], errors="coerce").fillna(0)
+        if "Contado" in df.columns:
+            df["Contado"] = pd.to_numeric(df["Contado"], errors="coerce")
+        if "Diferencia" in df.columns:
+            df["Diferencia"] = pd.to_numeric(df["Diferencia"], errors="coerce")
+        return df
+    except Exception as e:
+        st.error(f"Error cargando historial Carcasa: {e}")
+        return pd.DataFrame()
+
 def abrir_archivo_dinamico(nombre_o_id):
     if len(nombre_o_id) > 25:
         return client.open_by_key(nombre_o_id)
@@ -815,6 +861,7 @@ st.title("📦 Gestión de Importaciones")
 menu = st.sidebar.radio("MENÚ PRINCIPAL", [
     "📦 Importaciones",
     "📊 Dash Despachos",
+    "📋 Indicadores de Almacén",
 ])
 
 # ----------------------------------------------------------
@@ -1412,6 +1459,225 @@ if menu == "📦 Importaciones":
 # ----------------------------------------------------------
 if menu == "📊 Dash Despachos":
     render_dash_despachos()
+
+# ----------------------------------------------------------
+# MENÚ: INDICADORES DE ALMACÉN
+# ----------------------------------------------------------
+if menu == "📋 Indicadores de Almacén":
+    import plotly.graph_objects as go
+
+    st.markdown('<div class="titulo-seccion">📋 Indicadores de Almacén — LA CARCASA MOVIL</div>', unsafe_allow_html=True)
+
+    df_carc = cargar_historial_carcasa()
+
+    if df_carc.empty:
+        st.warning("⚠️ Sin datos en el historial de Carcasas.")
+    else:
+        # ── Filtros ────────────────────────────────────────────────────────
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            if "Fecha" in df_carc.columns:
+                meses_disp = sorted(df_carc["Fecha"].dropna().dt.to_period("M").unique(), reverse=True)
+                meses_str  = ["Todos"] + [str(m) for m in meses_disp]
+                mes_sel    = st.selectbox("Mes", meses_str, key="ind_mes")
+            else:
+                mes_sel = "Todos"
+        with col_f2:
+            if st.button("🔄 Actualizar", key="ind_refresh"):
+                st.cache_data.clear()
+                st.rerun()
+
+        # Aplicar filtro de mes
+        df = df_carc.copy()
+        if mes_sel != "Todos" and "Fecha" in df.columns:
+            df = df[df["Fecha"].dt.to_period("M").astype(str) == mes_sel]
+
+        contados = df[df["Estado"] != "⏳ Pendiente"] if "Estado" in df.columns else df
+
+        # ── Calcular indicadores ───────────────────────────────────────────
+        # ERU
+        ok_ubic = (contados["Estado"] == "✅ OK").sum() if "Estado" in contados.columns else 0
+        total_contados = len(contados)
+        eru = (ok_ubic / total_contados * 100) if total_contados > 0 else 0
+
+        # ERI porcentual por SKU
+        eri = 0
+        skus_ok = 0
+        total_skus = 0
+        if "Código SKU" in contados.columns and "Contado" in contados.columns and len(contados) > 0:
+            por_sku = contados.groupby("Código SKU").agg(
+                total_contado=("Contado", "sum"),
+                total_wms=("Stock WMS", "sum"),
+            ).reset_index()
+            por_sku = por_sku[por_sku["total_wms"] > 0]
+            por_sku["eri_val"] = (1 - (por_sku["total_contado"] - por_sku["total_wms"]).abs() / por_sku["total_wms"]).clip(lower=0)
+            total_skus = len(por_sku)
+            skus_ok    = (por_sku["eri_val"] >= 0.95).sum()
+            eri        = por_sku["eri_val"].mean() * 100 if total_skus > 0 else 0
+
+        # Ajustes
+        aj_pos = contados[contados["Diferencia"] > 0]["Diferencia"].sum() if "Diferencia" in contados.columns else 0
+        aj_neg = contados[contados["Diferencia"] < 0]["Diferencia"].sum() if "Diferencia" in contados.columns else 0
+        pendientes = (df["Estado"] == "⏳ Pendiente").sum() if "Estado" in df.columns else 0
+
+        # ── KPIs ──────────────────────────────────────────────────────────
+        st.markdown("")
+        c1, c2, c3, c4, c5 = st.columns(5)
+        def _kpi(col, label, value, sub, color="#1a7a4a"):
+            col.markdown(f"""
+            <div style="background:#fff;border-radius:10px;padding:16px 18px;text-align:center;
+                        border-top:4px solid {color};box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+              <div style="font-size:11px;color:#888;font-weight:700;text-transform:uppercase;
+                          letter-spacing:.5px;margin-bottom:6px;">{label}</div>
+              <div style="font-size:26px;font-weight:800;color:{color};line-height:1.1;">{value}</div>
+              <div style="font-size:11px;color:#aaa;margin-top:4px;">{sub}</div>
+            </div>""", unsafe_allow_html=True)
+
+        eru_color  = "#2d9e6b" if eru >= 85 else ("#e8a020" if eru >= 60 else "#c0392b")
+        eri_color  = "#2d9e6b" if eri >= 85 else ("#e8a020" if eri >= 60 else "#c0392b")
+        _kpi(c1, "ERI — Exactitud Inventario",   f"{eri:.1f}%",  f"{skus_ok} de {total_skus} SKUs ≥95%", eri_color)
+        _kpi(c2, "ERU — Exactitud Ubicaciones",  f"{eru:.1f}%",  f"{ok_ubic} OK de {total_contados} contados", eru_color)
+        _kpi(c3, "Ajustes Positivos (+)",        f"+{int(aj_pos):,}", "unidades sobrantes", "#2d9e6b")
+        _kpi(c4, "Ajustes Negativos (−)",        f"{int(aj_neg):,}", "unidades faltantes", "#c0392b")
+        _kpi(c5, "Pendientes",                   f"{int(pendientes):,}", "filas sin registrar", "#e8a020")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.divider()
+
+        # ── Gráficos ──────────────────────────────────────────────────────
+        g1, g2 = st.columns(2)
+
+        # Gauge ERI
+        with g1:
+            st.markdown('<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;">ERI — Exactitud de Inventario por SKU</div>', unsafe_allow_html=True)
+            fig_eri = go.Figure(go.Indicator(
+                mode="gauge+number+delta",
+                value=round(eri, 1),
+                delta={"reference": 85, "valueformat": ".1f"},
+                number={"suffix": "%", "font": {"size": 48, "color": "#1a7a4a"}},
+                gauge={
+                    "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#aaa"},
+                    "bar": {"color": eri_color},
+                    "bgcolor": "white",
+                    "borderwidth": 2,
+                    "bordercolor": "#e0f2e9",
+                    "steps": [
+                        {"range": [0, 60],  "color": "#fdecea"},
+                        {"range": [60, 85], "color": "#fff3e0"},
+                        {"range": [85, 100],"color": "#e8f5ee"},
+                    ],
+                    "threshold": {"line": {"color": "#1a7a4a", "width": 3}, "thickness": 0.75, "value": 85},
+                },
+                title={"text": "Meta: 85%", "font": {"size": 13, "color": "#888"}},
+            ))
+            fig_eri.update_layout(
+                height=280, margin=dict(l=20, r=20, t=40, b=10),
+                paper_bgcolor="white", font=dict(family="Arial"),
+            )
+            st.plotly_chart(fig_eri, use_container_width=True)
+
+        # Gauge ERU
+        with g2:
+            st.markdown('<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;">ERU — Exactitud de Registro de Ubicaciones</div>', unsafe_allow_html=True)
+            fig_eru = go.Figure(go.Indicator(
+                mode="gauge+number+delta",
+                value=round(eru, 1),
+                delta={"reference": 85, "valueformat": ".1f"},
+                number={"suffix": "%", "font": {"size": 48, "color": "#1a7a4a"}},
+                gauge={
+                    "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#aaa"},
+                    "bar": {"color": eru_color},
+                    "bgcolor": "white",
+                    "borderwidth": 2,
+                    "bordercolor": "#e0f2e9",
+                    "steps": [
+                        {"range": [0, 60],  "color": "#fdecea"},
+                        {"range": [60, 85], "color": "#fff3e0"},
+                        {"range": [85, 100],"color": "#e8f5ee"},
+                    ],
+                    "threshold": {"line": {"color": "#1a7a4a", "width": 3}, "thickness": 0.75, "value": 85},
+                },
+                title={"text": "Meta: 85%", "font": {"size": 13, "color": "#888"}},
+            ))
+            fig_eru.update_layout(
+                height=280, margin=dict(l=20, r=20, t=40, b=10),
+                paper_bgcolor="white", font=dict(family="Arial"),
+            )
+            st.plotly_chart(fig_eru, use_container_width=True)
+
+        st.divider()
+
+        # ── Evolución diaria ────────────────────────────────────────────────
+        st.markdown('<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;">📈 Evolución diaria de exactitud</div>', unsafe_allow_html=True)
+        if "Fecha" in contados.columns and len(contados) > 0:
+            ev = contados.groupby(contados["Fecha"].dt.date).agg(
+                Contados=("Estado", "count"),
+                OK=("Estado", lambda x: (x == "✅ OK").sum()),
+            ).reset_index()
+            ev.columns = ["Fecha", "Contados", "OK"]
+            ev["ERU %"] = (ev["OK"] / ev["Contados"] * 100).round(1)
+
+            fig_ev = go.Figure()
+            fig_ev.add_trace(go.Bar(
+                x=ev["Fecha"], y=ev["Contados"],
+                name="Filas contadas",
+                marker_color="rgba(45,158,107,0.20)",
+                yaxis="y2",
+            ))
+            fig_ev.add_trace(go.Scatter(
+                x=ev["Fecha"], y=ev["ERU %"],
+                name="ERU %",
+                mode="lines+markers",
+                line=dict(color="#1a7a4a", width=2.5),
+                marker=dict(color="#1a7a4a", size=7),
+                hovertemplate="<b>%{x}</b><br>ERU: %{y:.1f}%<extra></extra>",
+            ))
+            fig_ev.add_hline(y=85, line_dash="dot", line_color="#2d9e6b", opacity=0.5,
+                             annotation_text="Meta 85%", annotation_font_color="#2d9e6b")
+            fig_ev.update_layout(
+                height=320,
+                xaxis=dict(gridcolor="#e8f5ee", color="#888"),
+                yaxis=dict(title="ERU %", range=[0, 105], ticksuffix="%",
+                           gridcolor="#e8f5ee", color="#888"),
+                yaxis2=dict(title="Filas contadas", overlaying="y", side="right",
+                            color="#aaa", gridcolor="rgba(0,0,0,0)"),
+                plot_bgcolor="white", paper_bgcolor="white",
+                font=dict(family="Arial", size=11),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, bgcolor="rgba(0,0,0,0)"),
+                margin=dict(l=10, r=10, t=40, b=10),
+            )
+            st.plotly_chart(fig_ev, use_container_width=True)
+        else:
+            st.info("Sin conteos registrados para mostrar evolución.")
+
+        st.divider()
+
+        # ── Top SKUs con ajuste ──────────────────────────────────────────────
+        st.markdown('<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;">⚠️ SKUs con mayor diferencia</div>', unsafe_allow_html=True)
+        if "Código SKU" in contados.columns and len(contados) > 0:
+            df_aj = contados[contados["Estado"].isin(["❌ Ajuste", "⚠ Revisar"])].copy()
+            if df_aj.empty:
+                st.success("✅ No hay SKUs con ajustes en el período seleccionado.")
+            else:
+                top_aj = df_aj.groupby(["Código SKU", "Descripción"]).agg(
+                    Total_WMS=("Stock WMS", "sum"),
+                    Total_contado=("Contado", "sum"),
+                    Diferencia_total=("Diferencia", "sum"),
+                    Veces=("Estado", "count"),
+                ).reset_index()
+                top_aj["ERI %"] = ((1 - top_aj["Diferencia_total"].abs() / top_aj["Total_WMS"].replace(0, 1)).clip(lower=0) * 100).round(1)
+                top_aj = top_aj.sort_values("Diferencia_total", key=abs, ascending=False).head(10)
+                top_aj.columns = ["Código SKU", "Descripción", "Stock WMS", "Contado", "Diferencia", "Veces ajuste", "ERI %"]
+                st.dataframe(
+                    top_aj, use_container_width=True, hide_index=True,
+                    column_config={
+                        "Stock WMS"    : st.column_config.NumberColumn(format="%d"),
+                        "Contado"      : st.column_config.NumberColumn(format="%d"),
+                        "Diferencia"   : st.column_config.NumberColumn(format="%+d"),
+                        "Veces ajuste" : st.column_config.NumberColumn(format="%d"),
+                        "ERI %"        : st.column_config.NumberColumn(format="%.1f%%"),
+                    }
+                )
 
 # ----------------------------------------------------------
 # SINCRONIZAR
