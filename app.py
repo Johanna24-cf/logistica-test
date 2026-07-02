@@ -1488,6 +1488,8 @@ if menu == "📋 Indicadores de Almacén":
     st.markdown('<div class="titulo-seccion">📋 Indicadores de Almacén — LA CARCASA MOVIL</div>', unsafe_allow_html=True)
 
     df_carc = cargar_historial_carcasa()
+    st.write("Filas cargadas:", len(df_carc))
+    st.write("Columnas:", list(df_carc.columns) if not df_carc.empty else "vacío")
 
     if df_carc.empty:
         st.warning("⚠️ Sin datos en el historial de Carcasas.")
