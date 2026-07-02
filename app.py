@@ -1506,11 +1506,11 @@ if menu == "📋 Indicadores de Almacén":
         # Ajustes
         aj_pos = contados[contados["Diferencia"] > 0]["Diferencia"].sum() if "Diferencia" in contados.columns else 0
         aj_neg = contados[contados["Diferencia"] < 0]["Diferencia"].sum() if "Diferencia" in contados.columns else 0
-        pendientes = (df["Estado"] == "⏳ Pendiente").sum() if "Estado" in df.columns else 0
+      
 
         # ── KPIs ──────────────────────────────────────────────────────────
         st.markdown("")
-        c1, c2, c3, c4, c5 = st.columns(5)
+        c1, c2, c3, c4 = st.columns(4)
         def _kpi(col, label, value, sub, color="#1a7a4a"):
             col.markdown(f"""
             <div style="background:#fff;border-radius:10px;padding:16px 18px;text-align:center;
@@ -1527,118 +1527,8 @@ if menu == "📋 Indicadores de Almacén":
         _kpi(c2, "ERU — Exactitud Ubicaciones",  f"{eru:.1f}%",  f"{ok_ubic} OK de {total_contados} contados", eru_color)
         _kpi(c3, "Ajustes Positivos (+)",        f"+{int(aj_pos):,}", "unidades sobrantes", "#2d9e6b")
         _kpi(c4, "Ajustes Negativos (−)",        f"{int(aj_neg):,}", "unidades faltantes", "#c0392b")
-        _kpi(c5, "Pendientes",                   f"{int(pendientes):,}", "filas sin registrar", "#e8a020")
+    
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.divider()
-
-        # ── Gráficos ──────────────────────────────────────────────────────
-        g1, g2 = st.columns(2)
-
-        # Gauge ERI
-        with g1:
-            st.markdown('<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;">ERI — Exactitud de Inventario por SKU</div>', unsafe_allow_html=True)
-            fig_eri = go.Figure(go.Indicator(
-                mode="gauge+number+delta",
-                value=round(eri, 1),
-                delta={"reference": 85, "valueformat": ".1f"},
-                number={"suffix": "%", "font": {"size": 48, "color": "#1a7a4a"}},
-                gauge={
-                    "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#aaa"},
-                    "bar": {"color": eri_color},
-                    "bgcolor": "white",
-                    "borderwidth": 2,
-                    "bordercolor": "#e0f2e9",
-                    "steps": [
-                        {"range": [0, 60],  "color": "#fdecea"},
-                        {"range": [60, 85], "color": "#fff3e0"},
-                        {"range": [85, 100],"color": "#e8f5ee"},
-                    ],
-                    "threshold": {"line": {"color": "#1a7a4a", "width": 3}, "thickness": 0.75, "value": 85},
-                },
-                title={"text": "Meta: 85%", "font": {"size": 13, "color": "#888"}},
-            ))
-            fig_eri.update_layout(
-                height=280, margin=dict(l=20, r=20, t=40, b=10),
-                paper_bgcolor="white", font=dict(family="Arial"),
-            )
-            st.plotly_chart(fig_eri, use_container_width=True, key="gauge_eri")
-
-        # Gauge ERU
-        with g2:
-            st.markdown('<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;">ERU — Exactitud de Registro de Ubicaciones</div>', unsafe_allow_html=True)
-            fig_eru = go.Figure(go.Indicator(
-                mode="gauge+number+delta",
-                value=round(eru, 1),
-                delta={"reference": 85, "valueformat": ".1f"},
-                number={"suffix": "%", "font": {"size": 48, "color": "#1a7a4a"}},
-                gauge={
-                    "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#aaa"},
-                    "bar": {"color": eru_color},
-                    "bgcolor": "white",
-                    "borderwidth": 2,
-                    "bordercolor": "#e0f2e9",
-                    "steps": [
-                        {"range": [0, 60],  "color": "#fdecea"},
-                        {"range": [60, 85], "color": "#fff3e0"},
-                        {"range": [85, 100],"color": "#e8f5ee"},
-                    ],
-                    "threshold": {"line": {"color": "#1a7a4a", "width": 3}, "thickness": 0.75, "value": 85},
-                },
-                title={"text": "Meta: 85%", "font": {"size": 13, "color": "#888"}},
-            ))
-            fig_eru.update_layout(
-                height=280, margin=dict(l=20, r=20, t=40, b=10),
-                paper_bgcolor="white", font=dict(family="Arial"),
-            )
-            st.plotly_chart(fig_eru, use_container_width=True, key="gauge_eru")
-
-        st.divider()
-
-        # ── Evolución diaria ────────────────────────────────────────────────
-        st.markdown('<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;">📈 Evolución diaria de exactitud</div>', unsafe_allow_html=True)
-        if "Fecha" in contados.columns and len(contados) > 0:
-            ev = contados.groupby(contados["Fecha"].dt.date).agg(
-                Contados=("Estado", "count"),
-                OK=("Estado", lambda x: (x == "✅ OK").sum()),
-            ).reset_index()
-            ev.columns = ["Fecha", "Contados", "OK"]
-            ev["ERU %"] = (ev["OK"] / ev["Contados"] * 100).round(1)
-
-            fig_ev = go.Figure()
-            fig_ev.add_trace(go.Bar(
-                x=ev["Fecha"], y=ev["Contados"],
-                name="Filas contadas",
-                marker_color="rgba(45,158,107,0.20)",
-                yaxis="y2",
-            ))
-            fig_ev.add_trace(go.Scatter(
-                x=ev["Fecha"], y=ev["ERU %"],
-                name="ERU %",
-                mode="lines+markers",
-                line=dict(color="#1a7a4a", width=2.5),
-                marker=dict(color="#1a7a4a", size=7),
-                hovertemplate="<b>%{x}</b><br>ERU: %{y:.1f}%<extra></extra>",
-            ))
-            fig_ev.add_hline(y=85, line_dash="dot", line_color="#2d9e6b", opacity=0.5,
-                             annotation_text="Meta 85%", annotation_font_color="#2d9e6b")
-            fig_ev.update_layout(
-                height=320,
-                xaxis=dict(gridcolor="#e8f5ee", color="#888"),
-                yaxis=dict(title="ERU %", range=[0, 105], ticksuffix="%",
-                           gridcolor="#e8f5ee", color="#888"),
-                yaxis2=dict(title="Filas contadas", overlaying="y", side="right",
-                            color="#aaa", gridcolor="rgba(0,0,0,0)"),
-                plot_bgcolor="white", paper_bgcolor="white",
-                font=dict(family="Arial", size=11),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, bgcolor="rgba(0,0,0,0)"),
-                margin=dict(l=10, r=10, t=40, b=10),
-            )
-            st.plotly_chart(fig_ev, use_container_width=True, key="evol_diaria")
-        else:
-            st.info("Sin conteos registrados para mostrar evolución.")
-
-        st.divider()
 
         # ── Top SKUs con ajuste ──────────────────────────────────────────────
         st.markdown('<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;">⚠️ SKUs con mayor diferencia</div>', unsafe_allow_html=True)
