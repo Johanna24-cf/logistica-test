@@ -1562,7 +1562,7 @@ if menu == "📋 Indicadores de Almacén":
                 height=280, margin=dict(l=20, r=20, t=40, b=10),
                 paper_bgcolor="white", font=dict(family="Arial"),
             )
-            st.plotly_chart(fig_eri, use_container_width=True)
+            st.plotly_chart(fig_eri, use_container_width=True, key="gauge_eri")
 
         # Gauge ERU
         with g2:
@@ -1591,7 +1591,7 @@ if menu == "📋 Indicadores de Almacén":
                 height=280, margin=dict(l=20, r=20, t=40, b=10),
                 paper_bgcolor="white", font=dict(family="Arial"),
             )
-            st.plotly_chart(fig_eru, use_container_width=True)
+            st.plotly_chart(fig_eru, use_container_width=True, key="gauge_eru")
 
         st.divider()
 
@@ -1634,7 +1634,7 @@ if menu == "📋 Indicadores de Almacén":
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, bgcolor="rgba(0,0,0,0)"),
                 margin=dict(l=10, r=10, t=40, b=10),
             )
-            st.plotly_chart(fig_ev, use_container_width=True)
+            st.plotly_chart(fig_ev, use_container_width=True, key="evol_diaria")
         else:
             st.info("Sin conteos registrados para mostrar evolución.")
 
