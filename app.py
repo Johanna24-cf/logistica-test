@@ -201,19 +201,9 @@ SHEET_ID_HIST_CARCASA = "1x0jVDMYk9htwttNcpXlXeaQcR0ELoBYeF4iP2qYcs1s"
 
 @st.cache_data(ttl=300)
 def cargar_historial_carcasa():
-    """Lee todas las pestañas HIST_AAAA_MM del Sheet historial Carcasa."""
-    import gspread, re, pandas as pd
-    from google.oauth2 import service_account
+    import re, pandas as pd
     try:
-        creds = service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
-            scopes=[
-                "https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/drive.readonly",
-            ],
-        )
-        gc = gspread.authorize(creds)
-        sh = gc.open_by_key(SHEET_ID_HIST_CARCASA)
+        sh = client.open_by_key(SHEET_ID_HIST_CARCASA)
         frames = []
         for ws in sh.worksheets():
             if re.match(r"HIST_\d{4}_\d{2}", ws.title):
@@ -225,31 +215,9 @@ def cargar_historial_carcasa():
         if not frames:
             return pd.DataFrame()
         df = pd.concat(frames, ignore_index=True)
- 
         df.columns = [c.strip() for c in df.columns]
         if "Fecha" in df.columns:
             df["Fecha"] = pd.to_datetime(df["Fecha"], dayfirst=True, errors="coerce")
-        if "Código SKU" in df.columns:
-            df["Código SKU"] = df["Código SKU"].astype(str).str.lstrip("'").str.strip()
-        if "Stock WMS" in df.columns:
-            df["Stock WMS"] = pd.to_numeric(df["Stock WMS"], errors="coerce").fillna(0)
-        if "Contado" in df.columns:
-            df["Contado"] = pd.to_numeric(df["Contado"], errors="coerce")
-        if "Diferencia" in df.columns:
-            df["Diferencia"] = pd.to_numeric(df["Diferencia"], errors="coerce")
-        return df
-    except Exception as e:
-        st.error(f"Error cargando historial Carcasa: {e}")
-        return pd.DataFrame()
-        
-        if not frames:
-            return pd.DataFrame()
-        df = pd.concat(frames, ignore_index=True)
-        df.columns = [c.strip() for c in df.columns]
-        if "Fecha" in df.columns:
-            df["Fecha"] = pd.to_datetime(df["Fecha"], dayfirst=True, errors="coerce")
-        if "Código SKU" in df.columns:
-            df["Código SKU"] = df["Código SKU"].astype(str).str.lstrip("'").str.strip()
         if "Stock WMS" in df.columns:
             df["Stock WMS"] = pd.to_numeric(df["Stock WMS"], errors="coerce").fillna(0)
         if "Contado" in df.columns:
