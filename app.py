@@ -204,10 +204,14 @@ def cargar_historial_carcasa():
     import re, pandas as pd
     try:
         sh = client.open_by_key(SHEET_ID_HIST_CARCASA)
+        hojas = [ws.title for ws in sh.worksheets()]
+        st.write("Hojas encontradas:", hojas)  # ← debug temporal
         frames = []
         for ws in sh.worksheets():
+            st.write("Revisando hoja:", ws.title, "| match:", bool(re.match(r"HIST_\d{4}_\d{2}", ws.title)))  # ← debug
             if re.match(r"HIST_\d{4}_\d{2}", ws.title):
                 data = ws.get_all_records()
+                st.write("Filas en hoja:", len(data))  # ← debug
                 if data:
                     df = pd.DataFrame(data)
                     df["_sheet"] = ws.title
