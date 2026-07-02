@@ -199,19 +199,16 @@ client = conectar_google()
 # ── ID Sheet Historial Carcasa ─────────────────────────────────────────────
 SHEET_ID_HIST_CARCASA = "1x0jVDMYk9htwttNcpXlXeaQcR0ELoBYeF4iP2qYcs1s"
 
-#@st.cache_data(ttl=300)
+@st.cache_data(ttl=300)  # ← descomenta esta línea
 def cargar_historial_carcasa():
-    import re, pandas as pd 
+    import re, pandas as pd
     try:
         sh = client.open_by_key(SHEET_ID_HIST_CARCASA)
-        hojas = [ws.title for ws in sh.worksheets()]
-        st.write("Hojas encontradas:", hojas)  # ← debug temporal
+        # quita los st.write de debug
         frames = []
         for ws in sh.worksheets():
-            st.write("Revisando hoja:", ws.title, "| match:", bool(re.match(r"HIST_\d{4}_\d{2}", ws.title)))  # ← debug
             if re.match(r"HIST_\d{4}_\d{2}", ws.title):
                 data = ws.get_all_records()
-                st.write("Filas en hoja:", len(data))  # ← debug
                 if data:
                     df = pd.DataFrame(data)
                     df["_sheet"] = ws.title
@@ -232,7 +229,6 @@ def cargar_historial_carcasa():
     except Exception as e:
         st.error(f"Error cargando historial Carcasa: {type(e).__name__}: {str(e)}")
         return pd.DataFrame()
-
 def abrir_archivo_dinamico(nombre_o_id):
     if len(nombre_o_id) > 25:
         return client.open_by_key(nombre_o_id)
