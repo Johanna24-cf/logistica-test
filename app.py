@@ -1729,47 +1729,65 @@ if menu == "📋 Indicadores de Almacén":
 <style>
 *{{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif;}}
 html,body{{width:100%;height:100%;background:#f0faf4;overflow:hidden;}}
-#wrap{{width:100vw;height:100vh;display:flex;flex-direction:column;
-       padding:14px 22px 12px;gap:10px;background:#f4fbf7;}}
-/* HEADER */
-#hdr{{display:flex;align-items:center;justify-content:space-between;
-      background:#fff;border-radius:14px;padding:10px 22px;
-      border-bottom:4px solid #c8e06a;
-      box-shadow:0 2px 12px rgba(26,122,74,0.1);flex-shrink:0;height:72px;}}
-#hdr img{{height:46px;object-fit:contain;}}
-#hdr-mid{{text-align:center;flex:1;padding:0 20px;}}
-#hdr-mid .title{{color:#1a7a4a;font-size:1.5rem;font-weight:900;letter-spacing:.2px;}}
-#hdr-mid .sub{{color:#aaa;font-size:12px;font-weight:500;margin-top:2px;}}
-/* KPI ROW — altura fija grande como Power BI */
-#kpi-row{{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex-shrink:0;height:145px;}}
-.kpi-card{{background:#fff;border-radius:14px;padding:16px 20px;
-           border-left:6px solid #2d9e6b;
-           box-shadow:0 3px 12px rgba(0,0,0,0.06);
-           display:flex;flex-direction:column;justify-content:space-between;}}
+/* Layout: 3 tercios verticales — header / KPIs / gráficos */
+#wrap{{
+  width:100vw;height:100vh;display:flex;flex-direction:column;
+  padding:12px 20px 10px;gap:8px;background:#f4fbf7;
+  overflow:hidden;
+}}
+/* TERCIO 1 — HEADER ~28vh */
+#hdr{{
+  display:flex;align-items:center;justify-content:space-between;
+  background:#fff;border-radius:14px;padding:0 28px;
+  border-bottom:5px solid #c8e06a;
+  box-shadow:0 2px 12px rgba(26,122,74,0.1);
+  flex:0 0 calc(28vh - 16px);
+}}
+#hdr img{{height:60%;max-height:80px;object-fit:contain;}}
+#hdr-mid{{text-align:center;flex:1;padding:0 24px;}}
+#hdr-mid .title{{color:#1a7a4a;font-size:clamp(1.1rem,2.2vh,1.8rem);font-weight:900;letter-spacing:.2px;}}
+#hdr-mid .sub{{color:#aaa;font-size:clamp(10px,1.4vh,14px);font-weight:500;margin-top:4px;}}
+/* TERCIO 2 — KPIs ~28vh */
+#kpi-row{{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
+  flex:0 0 calc(28vh - 16px);
+}}
+.kpi-card{{
+  background:#fff;border-radius:14px;padding:clamp(10px,1.5vh,20px) clamp(12px,1.8vh,22px);
+  border-left:6px solid #2d9e6b;
+  box-shadow:0 3px 12px rgba(0,0,0,0.06);
+  display:flex;flex-direction:column;justify-content:space-between;
+  overflow:hidden;
+}}
 .kpi-top{{display:flex;align-items:center;gap:8px;}}
-.kpi-icon{{font-size:20px;}}
-.kpi-name{{font-size:11px;font-weight:800;text-transform:uppercase;
-           letter-spacing:.7px;color:#888;}}
-.kpi-formula{{font-size:9px;color:#ccc;margin-top:2px;}}
-.kpi-val{{font-size:36px;font-weight:900;line-height:1;margin-top:4px;}}
-.kpi-sub{{font-size:10.5px;color:#bbb;padding-top:6px;border-top:1px solid #f0f0f0;}}
-/* CHARTS ROW — menos alto, más compacto */
-#charts-row{{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:0;max-height:calc(100vh - 72px - 145px - 60px);}}
-.chart-card{{background:#fff;border-radius:14px;padding:14px 18px 8px;
-             box-shadow:0 3px 12px rgba(0,0,0,0.06);
-             display:flex;flex-direction:column;border-top:3px solid #c8e06a;}}
-.chart-title{{font-size:13px;font-weight:800;color:#1a7a4a;
-              margin-bottom:2px;flex-shrink:0;}}
-.chart-sub{{font-size:10px;color:#bbb;margin-bottom:6px;flex-shrink:0;}}
+.kpi-icon{{font-size:clamp(16px,2vh,22px);}}
+.kpi-name{{font-size:clamp(9px,1.2vh,13px);font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#888;}}
+.kpi-formula{{font-size:clamp(8px,1vh,10px);color:#ccc;margin-top:2px;}}
+.kpi-val{{font-size:clamp(24px,4vh,44px);font-weight:900;line-height:1;margin-top:4px;}}
+.kpi-sub{{font-size:clamp(9px,1.1vh,12px);color:#bbb;padding-top:5px;border-top:1px solid #f0f0f0;}}
+/* TERCIO 3 — GRÁFICOS ~44vh */
+#charts-row{{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;
+  flex:1 1 auto;min-height:0;
+}}
+.chart-card{{
+  background:#fff;border-radius:14px;padding:12px 18px 6px;
+  box-shadow:0 3px 12px rgba(0,0,0,0.06);
+  display:flex;flex-direction:column;border-top:3px solid #c8e06a;
+  overflow:hidden;
+}}
+.chart-title{{font-size:clamp(11px,1.5vh,15px);font-weight:800;color:#1a7a4a;margin-bottom:2px;flex-shrink:0;}}
+.chart-sub{{font-size:clamp(9px,1vh,11px);color:#bbb;margin-bottom:4px;flex-shrink:0;}}
 .chart-div{{flex:1;min-height:0;}}
-/* FULLSCREEN BTN */
-#fsb{{position:fixed;bottom:16px;right:20px;
-      background:linear-gradient(135deg,#1a7a4a,#2d9e6b);
-      border:none;border-radius:10px;padding:9px 22px;
-      font-size:13px;font-weight:700;color:#fff;cursor:pointer;
-      box-shadow:0 4px 14px rgba(26,122,74,0.35);z-index:9999;
-      letter-spacing:.3px;}}
-#fsb:hover{{background:linear-gradient(135deg,#145a37,#1a7a4a);}}
+/* BTN FULLSCREEN */
+#fsb{{
+  position:fixed;bottom:14px;right:18px;
+  background:linear-gradient(135deg,#1a7a4a,#2d9e6b);
+  border:none;border-radius:10px;padding:8px 20px;
+  font-size:13px;font-weight:700;color:#fff;cursor:pointer;
+  box-shadow:0 4px 14px rgba(26,122,74,0.35);z-index:9999;
+}}
+#fsb:hover{{opacity:.9;}}
 </style>
 </head>
 <body>
