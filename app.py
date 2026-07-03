@@ -1559,27 +1559,43 @@ if menu == "📋 Indicadores de Almacén":
             g1, g2 = st.columns([1, 2])
 
             with g1:
-                estados = contados["Estado"].value_counts().reset_index()
-                estados.columns = ["Estado", "Cantidad"]
-                color_map = {"✅ OK": "#2d9e6b", "⚠ Revisar": "#e8a020", "❌ Ajuste": "#c0392b"}
-                fig_pie = go.Figure(go.Pie(
-                    labels=estados["Estado"],
-                    values=estados["Cantidad"],
-                    hole=0.55,
-                    marker=dict(colors=[color_map.get(e, "#aaa") for e in estados["Estado"]],
-                                line=dict(color="#fff", width=2)),
-                    textinfo="percent+value",
-                    textfont=dict(size=12),
-                    hovertemplate="<b>%{label}</b><br>%{value} filas (%{percent})<extra></extra>",
-                ))
-                fig_pie.update_layout(
-                    height=240, margin=dict(l=0, r=0, t=20, b=0),
-                    paper_bgcolor="white", showlegend=True,
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.25,
-                                font=dict(size=11), bgcolor="rgba(0,0,0,0)"),
-                    font=dict(family="Arial"),
-                )
-                st.plotly_chart(fig_pie, use_container_width=True, key="pie_estados")
+                # ERI evolutivo (línea)
+                if "Fecha" in contados.columns and "Código SKU" in contados.columns and len(contados) > 0:
+                    import pandas as _pd2
+                    _ev2 = []
+                    for _d, _grp in contados.groupby(contados["Fecha"].dt.date):
+                        _ps = _grp.groupby("Código SKU").agg(tc=("Contado","sum"),tw=("Stock WMS","sum")).reset_index()
+                        _ps = _ps[_ps["tw"]>0]
+                        _ps["e"] = (1-(_ps["tc"]-_ps["tw"]).abs()/_ps["tw"]).clip(lower=0)
+                        _ev2.append({"Fecha":_d,"ERI":round(_ps["e"].mean()*100,1) if len(_ps)>0 else 0})
+                    _df_eri = _pd2.DataFrame(_ev2)
+
+                    fig_eri_line = go.Figure()
+                    fig_eri_line.add_trace(go.Scatter(
+                        x=_df_eri["Fecha"], y=_df_eri["ERI"],
+                        mode="lines+markers+text",
+                        line=dict(color="#1a7a4a", width=2.5),
+                        marker=dict(color="#1a7a4a", size=7),
+                        text=_df_eri["ERI"].apply(lambda v: f"{v:.1f}%"),
+                        textposition="top center",
+                        textfont=dict(size=10, color="#1a7a4a"),
+                        hovertemplate="<b>%{x}</b><br>ERI: %{y:.1f}%<extra></extra>",
+                    ))
+                    fig_eri_line.add_hline(y=85, line_dash="dot", line_color="#2d9e6b", opacity=0.5,
+                                           annotation_text="Meta 85%", annotation_font_color="#2d9e6b")
+                    fig_eri_line.update_layout(
+                        height=240,
+                        xaxis=dict(gridcolor="#e8f5ee", color="#888", title=""),
+                        yaxis=dict(title="ERI %", range=[0, 110], ticksuffix="%",
+                                   gridcolor="#e8f5ee", color="#888"),
+                        plot_bgcolor="white", paper_bgcolor="white",
+                        font=dict(family="Arial", size=11),
+                        showlegend=False,
+                        margin=dict(l=10, r=10, t=30, b=10),
+                    )
+                    st.plotly_chart(fig_eri_line, use_container_width=True, key="eri_linea")
+                else:
+                    st.info("Sin datos suficientes para ERI evolutivo.")
 
             with g2:
                 # Evolución diaria si hay fechas
@@ -1713,38 +1729,46 @@ if menu == "📋 Indicadores de Almacén":
 <style>
 *{{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif;}}
 html,body{{width:100%;height:100%;background:#f0faf4;overflow:hidden;}}
-#wrap{{width:100vw;height:100vh;display:flex;flex-direction:column;padding:14px 20px 10px;gap:10px;}}
+#wrap{{width:100vw;height:100vh;display:flex;flex-direction:column;
+       padding:16px 24px 14px;gap:12px;background:#f4fbf7;}}
 /* HEADER */
 #hdr{{display:flex;align-items:center;justify-content:space-between;
-      background:#fff;border-radius:12px;padding:10px 20px;
-      border-bottom:4px solid #c8e06a;box-shadow:0 2px 8px rgba(0,0,0,0.06);flex-shrink:0;}}
-#hdr img{{height:52px;object-fit:contain;}}
-#hdr-mid{{text-align:center;flex:1;padding:0 20px;}}
-#hdr-mid .title{{color:#1a7a4a;font-size:1.3rem;font-weight:800;letter-spacing:.3px;}}
-#hdr-mid .sub{{color:#aaa;font-size:11px;font-weight:500;margin-top:2px;}}
+      background:#fff;border-radius:14px;padding:12px 24px;
+      border-bottom:4px solid #c8e06a;
+      box-shadow:0 2px 12px rgba(26,122,74,0.1);flex-shrink:0;}}
+#hdr img{{height:50px;object-fit:contain;}}
+#hdr-mid{{text-align:center;flex:1;padding:0 24px;}}
+#hdr-mid .title{{color:#1a7a4a;font-size:1.25rem;font-weight:800;letter-spacing:.2px;}}
+#hdr-mid .sub{{color:#aaa;font-size:11px;font-weight:500;margin-top:3px;}}
 /* KPI ROW */
-#kpi-row{{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex-shrink:0;}}
-.kpi-card{{background:#fff;border-radius:12px;padding:12px 16px;
-           border-left:5px solid #2d9e6b;box-shadow:0 2px 8px rgba(0,0,0,0.05);
+#kpi-row{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;flex-shrink:0;height:115px;}}
+.kpi-card{{background:#fff;border-radius:12px;padding:14px 16px;
+           border-left:5px solid #2d9e6b;
+           box-shadow:0 2px 10px rgba(0,0,0,0.05);
            display:flex;flex-direction:column;justify-content:space-between;}}
-.kpi-icon{{font-size:18px;}}
-.kpi-name{{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#888;margin-top:2px;}}
-.kpi-formula{{font-size:9px;color:#bbb;margin-top:1px;}}
-.kpi-val{{font-size:28px;font-weight:900;line-height:1.1;margin-top:6px;}}
-.kpi-sub{{font-size:10px;color:#aaa;margin-top:4px;padding-top:4px;border-top:1px solid #f0f0f0;}}
+.kpi-icon{{font-size:16px;}}
+.kpi-name{{font-size:9.5px;font-weight:800;text-transform:uppercase;
+           letter-spacing:.7px;color:#999;margin-top:1px;}}
+.kpi-formula{{font-size:8.5px;color:#ccc;margin-top:1px;}}
+.kpi-val{{font-size:26px;font-weight:900;line-height:1.1;}}
+.kpi-sub{{font-size:9.5px;color:#bbb;padding-top:5px;border-top:1px solid #f5f5f5;}}
 /* CHARTS ROW */
-#charts-row{{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:0;}}
-.chart-card{{background:#fff;border-radius:12px;padding:12px 14px;
-             box-shadow:0 2px 8px rgba(0,0,0,0.05);display:flex;flex-direction:column;}}
-.chart-title{{font-size:12px;font-weight:700;color:#1a7a4a;margin-bottom:6px;flex-shrink:0;}}
+#charts-row{{display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1;min-height:0;}}
+.chart-card{{background:#fff;border-radius:12px;padding:14px 16px 10px;
+             box-shadow:0 2px 10px rgba(0,0,0,0.05);
+             display:flex;flex-direction:column;border-top:3px solid #e8f5ee;}}
+.chart-title{{font-size:11.5px;font-weight:700;color:#1a7a4a;
+              margin-bottom:4px;flex-shrink:0;letter-spacing:.1px;}}
+.chart-sub{{font-size:10px;color:#bbb;margin-bottom:8px;flex-shrink:0;}}
 .chart-div{{flex:1;min-height:0;}}
 /* FULLSCREEN BTN */
-#fsb{{position:fixed;bottom:16px;right:20px;
-      background:linear-gradient(135deg,#2d9e6b,#c8e06a);
-      border:none;border-radius:8px;padding:8px 18px;
-      font-size:13px;font-weight:700;color:#0d1f16;cursor:pointer;
-      box-shadow:0 3px 10px rgba(45,158,107,0.3);z-index:9999;}}
-#fsb:hover{{opacity:.9;}}
+#fsb{{position:fixed;bottom:18px;right:22px;
+      background:linear-gradient(135deg,#1a7a4a,#2d9e6b);
+      border:none;border-radius:10px;padding:9px 20px;
+      font-size:13px;font-weight:700;color:#fff;cursor:pointer;
+      box-shadow:0 4px 14px rgba(26,122,74,0.35);z-index:9999;
+      letter-spacing:.3px;}}
+#fsb:hover{{background:linear-gradient(135deg,#145a37,#1a7a4a);}}
 </style>
 </head>
 <body>
@@ -1799,11 +1823,13 @@ html,body{{width:100%;height:100%;background:#f0faf4;overflow:hidden;}}
   <!-- CHARTS ROW -->
   <div id="charts-row">
     <div class="chart-card">
-      <div class="chart-title">📊 Evolución diaria — ERI (Exactitud por SKU)</div>
+      <div class="chart-title">📊 ERI — Exactitud de Inventario por SKU</div>
+      <div class="chart-sub">Evolución diaria · SKU correctos / Total auditados × 100</div>
       <div class="chart-div" id="chart-eri"></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">📊 Evolución diaria — ERU (Exactitud por Ubicación)</div>
+      <div class="chart-title">📊 ERU — Exactitud de Registro de Ubicaciones</div>
+      <div class="chart-sub">Evolución diaria · Ubicaciones correctas / Total auditadas × 100</div>
       <div class="chart-div" id="chart-eru"></div>
     </div>
   </div>
@@ -1821,39 +1847,55 @@ var eruVals  = {_json.dumps(_eru_vals)};
 function mkChart(divId, dates, vals, color, label) {{
   var el = document.getElementById(divId);
   if (!el || !dates.length) return;
-  var W = el.clientWidth || 400;
-  var H = el.clientHeight || 200;
+  var W = el.clientWidth || 500;
+  var H = el.clientHeight || 220;
+  // Etiquetas solo en algunos puntos para no saturar
+  var textArr = vals.map(function(v,i) {{
+    return (i===0 || i===vals.length-1 || i%Math.max(1,Math.floor(vals.length/5))===0)
+      ? v.toFixed(1)+"%" : "";
+  }});
   Plotly.newPlot(divId, [
     {{
-      type: "scatter", mode: "lines+markers",
+      type: "scatter", mode: "lines+markers+text",
       x: dates, y: vals,
       name: label,
-      line: {{color: color, width: 3}},
-      marker: {{color: color, size: 8}},
-      fill: "tozeroy",
-      fillcolor: color.replace(")", ",0.08)").replace("rgb","rgba"),
-      hovertemplate: "<b>%{{x}}</b><br>" + label + ": %{{y:.1f}}%<extra></extra>"
+      line: {{color: color, width: 3, shape:"spline", smoothing:0.4}},
+      marker: {{color: color, size: 7, symbol:"circle",
+               line:{{color:"#fff",width:1.5}}}},
+      text: textArr,
+      textposition: "top center",
+      textfont: {{size:11, color:color, family:"Segoe UI,Arial"}},
+      hovertemplate: "<b>%{{x}}</b><br>" + label + ": %{{y:.1f}}%<extra></extra>",
+      cliponaxis: false
     }}
   ], {{
     autosize: false, width: W, height: H,
-    paper_bgcolor: "#ffffff", plot_bgcolor: "#ffffff",
-    margin: {{l:45,r:15,t:10,b:55}},
-    font: {{family:"Segoe UI,Arial", size:11}},
-    xaxis: {{showgrid:false, tickfont:{{size:10}}, tickangle:-30}},
-    yaxis: {{range:[0,105], ticksuffix:"%", gridcolor:"#f0faf4",
-             tickfont:{{size:10}}}},
+    paper_bgcolor: "#ffffff", plot_bgcolor: "#fafffe",
+    margin: {{l:48,r:20,t:20,b:58}},
+    font: {{family:"Segoe UI,Arial", size:11, color:"#444"}},
+    xaxis: {{
+      showgrid:false, tickfont:{{size:10,color:"#888"}},
+      tickangle:-30, zeroline:false,
+      linecolor:"#e0e0e0", linewidth:1
+    }},
+    yaxis: {{
+      range:[Math.max(0,Math.min.apply(null,vals)-10), 105],
+      ticksuffix:"%", gridcolor:"#f0f7f4",
+      tickfont:{{size:10,color:"#888"}},
+      zeroline:false, linecolor:"#e0e0e0", linewidth:1
+    }},
     shapes: [{{
-      type:"line", x0:dates[0]||0, x1:dates[dates.length-1]||1,
+      type:"line", xref:"paper", x0:0, x1:1,
       y0:85, y1:85,
       line:{{color:"#2d9e6b", width:1.5, dash:"dot"}}
     }}],
     annotations: [{{
-      x:dates[dates.length-1]||1, y:85,
+      xref:"paper", x:1, y:85,
       xanchor:"right", yanchor:"bottom",
       text:"Meta 85%", showarrow:false,
-      font:{{size:10, color:"#2d9e6b"}}
+      font:{{size:10, color:"#2d9e6b", family:"Segoe UI,Arial"}}
     }}]
-  }}, {{displayModeBar:false}});
+  }}, {{displayModeBar:false, responsive:false}});
 }}
 
 function renderCharts() {{
