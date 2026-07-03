@@ -157,32 +157,31 @@ def mostrar_logo_izquierdo():
 
 
 def mostrar_logo_cf_derecha():
-    """Logo CARGOFLEX alineado a la derecha, misma altura que logo izquierdo."""
-    nombre = "CARGOFLEX.png"
-    if os.path.exists(nombre):
-        with open(nombre, "rb") as f:
-            b64 = base64.b64encode(f.read()).decode()
-        st.markdown(
-            f'''<div style="
-                position: fixed;
-                top: 80px;
-                right: 32px;
-                z-index: 99999;
-                background: transparent;
-            ">
-                <img src="data:image/png;base64,{b64}"
-                     width="250"
-                     style="image-rendering: -webkit-optimize-contrast;
-                            image-rendering: crisp-edges;
-                            max-width: 250px;">
-            </div>''',
-            unsafe_allow_html=True,
-        )
+    """Logo CARGOFLEX alineado a la derecha — inline, no flotante."""
+    pass  # Se maneja en mostrar_cabecera()
 
 
 cargar_estilos()
-mostrar_logo_izquierdo()
-mostrar_logo_cf_derecha()
+
+# ── Cabecera con logos alineados ──────────────────────────────────────────
+def _b64_img(path):
+    if os.path.exists(path):
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    return ""
+
+_b64_carc = _b64_img("CARCASAS.png")
+_b64_cf   = _b64_img("CARGOFLEX.png")
+
+_img_carc = f'<img src="data:image/png;base64,{_b64_carc}" style="height:70px;object-fit:contain;">' if _b64_carc else ""
+_img_cf   = f'<img src="data:image/png;base64,{_b64_cf}"   style="height:70px;object-fit:contain;">' if _b64_cf   else ""
+
+st.markdown(f'''
+<div style="display:flex;align-items:center;justify-content:space-between;
+            padding:10px 0 18px;border-bottom:3px solid #c8e06a;margin-bottom:18px;">
+  <div>{_img_carc}</div>
+  <div>{_img_cf}</div>
+</div>''', unsafe_allow_html=True)
 
 # 3. CONEXIÓN Y CARGA
 @st.cache_resource
@@ -1453,29 +1452,41 @@ if menu == "📊 Dash Despachos":
 if menu == "📋 Indicadores de Almacén":
     import plotly.graph_objects as go
 
-    st.markdown('<div class="titulo-seccion">📋 Indicadores de Almacén — LA CARCASA MOVIL</div>', unsafe_allow_html=True)
+    # ── Título sección ─────────────────────────────────────────────────────
+    st.markdown("""
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+      <div style="background:linear-gradient(135deg,#1a7a4a,#2d9e6b);border-radius:10px;
+                  padding:8px 14px;">
+        <span style="color:#fff;font-size:20px;">📋</span>
+      </div>
+      <div>
+        <div style="font-size:20px;font-weight:800;color:#1a7a4a;">Indicadores de Almacén</div>
+        <div style="font-size:12px;color:#aaa;font-weight:500;">LA CARCASA MOVIL · Inventario Cíclico</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     df_carc = cargar_historial_carcasa()
-
 
     if df_carc.empty:
         st.warning("⚠️ Sin datos en el historial de Carcasas.")
     else:
         # ── Filtros ────────────────────────────────────────────────────────
-        col_f1, col_f2 = st.columns(2)
+        col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
         with col_f1:
             if "Fecha" in df_carc.columns:
                 meses_disp = sorted(df_carc["Fecha"].dropna().dt.to_period("M").unique(), reverse=True)
                 meses_str  = ["Todos"] + [str(m) for m in meses_disp]
-                mes_sel    = st.selectbox("Mes", meses_str, key="ind_mes")
+                mes_sel    = st.selectbox("📅 Período", meses_str, key="ind_mes")
             else:
                 mes_sel = "Todos"
-        with col_f2:
-            if st.button("🔄 Actualizar", key="ind_refresh"):
+        with col_f3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🔄 Actualizar datos", key="ind_refresh"):
                 st.cache_data.clear()
                 st.rerun()
 
-        # Aplicar filtro de mes
+        # Aplicar filtro
         df = df_carc.copy()
         if mes_sel != "Todos" and "Fecha" in df.columns:
             df = df[df["Fecha"].dt.to_period("M").astype(str) == mes_sel]
@@ -1483,15 +1494,11 @@ if menu == "📋 Indicadores de Almacén":
         contados = df[df["Estado"] != "⏳ Pendiente"] if "Estado" in df.columns else df
 
         # ── Calcular indicadores ───────────────────────────────────────────
-        # ERU
-        ok_ubic = (contados["Estado"] == "✅ OK").sum() if "Estado" in contados.columns else 0
-        total_contados = len(contados)
-        eru = (ok_ubic / total_contados * 100) if total_contados > 0 else 0
+        ok_ubic       = (contados["Estado"] == "✅ OK").sum() if "Estado" in contados.columns else 0
+        total_contados= len(contados)
+        eru           = (ok_ubic / total_contados * 100) if total_contados > 0 else 0
 
-        # ERI porcentual por SKU
-        eri = 0
-        skus_ok = 0
-        total_skus = 0
+        eri = 0; skus_ok = 0; total_skus = 0
         if "Código SKU" in contados.columns and "Contado" in contados.columns and len(contados) > 0:
             por_sku = contados.groupby("Código SKU").agg(
                 total_contado=("Contado", "sum"),
@@ -1503,35 +1510,128 @@ if menu == "📋 Indicadores de Almacén":
             skus_ok    = (por_sku["eri_val"] >= 0.95).sum()
             eri        = por_sku["eri_val"].mean() * 100 if total_skus > 0 else 0
 
-        # Ajustes
         aj_pos = contados[contados["Diferencia"] > 0]["Diferencia"].sum() if "Diferencia" in contados.columns else 0
         aj_neg = contados[contados["Diferencia"] < 0]["Diferencia"].sum() if "Diferencia" in contados.columns else 0
-      
 
-        # ── KPIs ──────────────────────────────────────────────────────────
-        st.markdown("")
-        c1, c2, c3, c4 = st.columns(4)
-        def _kpi(col, label, value, sub, color="#1a7a4a"):
+        # ── KPIs — diseño tipo tarjeta con ícono ──────────────────────────
+        eru_color = "#2d9e6b" if eru >= 85 else ("#e8a020" if eru >= 60 else "#c0392b")
+        eri_color = "#2d9e6b" if eri >= 85 else ("#e8a020" if eri >= 60 else "#c0392b")
+
+        def _kpi2(col, icon, label, formula, value, sub, color, bg):
             col.markdown(f"""
-            <div style="background:#fff;border-radius:10px;padding:16px 18px;text-align:center;
-                        border-top:4px solid {color};box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-              <div style="font-size:11px;color:#888;font-weight:700;text-transform:uppercase;
-                          letter-spacing:.5px;margin-bottom:6px;">{label}</div>
-              <div style="font-size:26px;font-weight:800;color:{color};line-height:1.1;">{value}</div>
-              <div style="font-size:11px;color:#aaa;margin-top:4px;">{sub}</div>
+            <div style="background:{bg};border-radius:14px;padding:18px 20px;
+                        border-left:5px solid {color};box-shadow:0 3px 12px rgba(0,0,0,0.07);
+                        min-height:130px;display:flex;flex-direction:column;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span style="font-size:20px;">{icon}</span>
+                <div>
+                  <div style="font-size:12px;font-weight:800;color:{color};text-transform:uppercase;
+                              letter-spacing:.6px;">{label}</div>
+                  <div style="font-size:10px;color:#aaa;">{formula}</div>
+                </div>
+              </div>
+              <div style="font-size:32px;font-weight:900;color:{color};line-height:1;">{value}</div>
+              <div style="font-size:11px;color:#888;margin-top:6px;padding-top:6px;
+                          border-top:1px solid rgba(0,0,0,0.06);">{sub}</div>
             </div>""", unsafe_allow_html=True)
 
-        eru_color  = "#2d9e6b" if eru >= 85 else ("#e8a020" if eru >= 60 else "#c0392b")
-        eri_color  = "#2d9e6b" if eri >= 85 else ("#e8a020" if eri >= 60 else "#c0392b")
-        _kpi(c1, "ERI — Exactitud Inventario",   f"{eri:.1f}%",  f"{skus_ok} de {total_skus} SKUs ≥95%", eri_color)
-        _kpi(c2, "ERU — Exactitud Ubicaciones",  f"{eru:.1f}%",  f"{ok_ubic} OK de {total_contados} contados", eru_color)
-        _kpi(c3, "Ajustes Positivos (+)",        f"+{int(aj_pos):,}", "unidades sobrantes", "#2d9e6b")
-        _kpi(c4, "Ajustes Negativos (−)",        f"{int(aj_neg):,}", "unidades faltantes", "#c0392b")
-    
+        st.markdown("<br>", unsafe_allow_html=True)
+        k1, k2, k3, k4 = st.columns(4)
+        _kpi2(k1, "✅", "ERI", "SKU correctos / Total auditados × 100",
+              f"{eri:.1f}%", f"{skus_ok} de {total_skus} SKUs ≥ 95%", eri_color, "#f0faf4")
+        _kpi2(k2, "📍", "ERU", "Ubicaciones correctas / Total auditadas × 100",
+              f"{eru:.1f}%", f"{ok_ubic} OK de {total_contados} contados", eru_color, "#f0faf4")
+        _kpi2(k3, "📈", "Ajustes Positivos", "Suma unidades sobrantes",
+              f"+{int(aj_pos):,}", "unidades contadas de más vs WMS", "#1a7a4a", "#f0faf4")
+        _kpi2(k4, "📉", "Ajustes Negativos", "Suma unidades faltantes",
+              f"{int(aj_neg):,}", "unidades contadas de menos vs WMS", "#c0392b", "#fff5f5")
 
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        # ── Top SKUs con ajuste ──────────────────────────────────────────────
-        st.markdown('<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:8px;">⚠️ SKUs con mayor diferencia</div>', unsafe_allow_html=True)
+        # ── Gráfico de estados ─────────────────────────────────────────────
+        if len(contados) > 0 and "Estado" in contados.columns:
+            st.markdown("""
+            <div style="font-size:14px;font-weight:700;color:#1a7a4a;
+                        margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #c8e06a;">
+              📊 Distribución de resultados
+            </div>""", unsafe_allow_html=True)
+
+            g1, g2 = st.columns([1, 2])
+
+            with g1:
+                estados = contados["Estado"].value_counts().reset_index()
+                estados.columns = ["Estado", "Cantidad"]
+                color_map = {"✅ OK": "#2d9e6b", "⚠ Revisar": "#e8a020", "❌ Ajuste": "#c0392b"}
+                fig_pie = go.Figure(go.Pie(
+                    labels=estados["Estado"],
+                    values=estados["Cantidad"],
+                    hole=0.55,
+                    marker=dict(colors=[color_map.get(e, "#aaa") for e in estados["Estado"]],
+                                line=dict(color="#fff", width=2)),
+                    textinfo="percent+value",
+                    textfont=dict(size=12),
+                    hovertemplate="<b>%{label}</b><br>%{value} filas (%{percent})<extra></extra>",
+                ))
+                fig_pie.update_layout(
+                    height=240, margin=dict(l=0, r=0, t=20, b=0),
+                    paper_bgcolor="white", showlegend=True,
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.25,
+                                font=dict(size=11), bgcolor="rgba(0,0,0,0)"),
+                    font=dict(family="Arial"),
+                )
+                st.plotly_chart(fig_pie, use_container_width=True, key="pie_estados")
+
+            with g2:
+                # Evolución diaria si hay fechas
+                if "Fecha" in contados.columns:
+                    ev = contados.groupby(contados["Fecha"].dt.date).agg(
+                        Contados=("Estado", "count"),
+                        OK=("Estado", lambda x: (x == "✅ OK").sum()),
+                    ).reset_index()
+                    ev.columns = ["Fecha", "Contados", "OK"]
+                    ev["ERU %"] = (ev["OK"] / ev["Contados"] * 100).round(1)
+
+                    fig_ev = go.Figure()
+                    fig_ev.add_trace(go.Bar(
+                        x=ev["Fecha"], y=ev["Contados"],
+                        name="Filas contadas",
+                        marker_color="rgba(45,158,107,0.18)",
+                        yaxis="y2",
+                    ))
+                    fig_ev.add_trace(go.Scatter(
+                        x=ev["Fecha"], y=ev["ERU %"],
+                        name="ERU %",
+                        mode="lines+markers",
+                        line=dict(color="#1a7a4a", width=2.5),
+                        marker=dict(color="#1a7a4a", size=7),
+                        hovertemplate="<b>%{x}</b><br>ERU: %{y:.1f}%<extra></extra>",
+                    ))
+                    fig_ev.add_hline(y=85, line_dash="dot", line_color="#2d9e6b", opacity=0.5,
+                                     annotation_text="Meta 85%", annotation_font_color="#2d9e6b")
+                    fig_ev.update_layout(
+                        height=240,
+                        xaxis=dict(gridcolor="#e8f5ee", color="#888", title=""),
+                        yaxis=dict(title="ERU %", range=[0, 105], ticksuffix="%",
+                                   gridcolor="#e8f5ee", color="#888"),
+                        yaxis2=dict(title="Filas", overlaying="y", side="right",
+                                    color="#aaa", gridcolor="rgba(0,0,0,0)"),
+                        plot_bgcolor="white", paper_bgcolor="white",
+                        font=dict(family="Arial", size=11),
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                                    bgcolor="rgba(0,0,0,0)"),
+                        margin=dict(l=10, r=10, t=30, b=10),
+                    )
+                    st.plotly_chart(fig_ev, use_container_width=True, key="evol_eru")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Top SKUs con ajuste ─────────────────────────────────────────────
+        st.markdown("""
+        <div style="font-size:14px;font-weight:700;color:#1a7a4a;
+                    margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #c8e06a;">
+          ⚠️ SKUs con mayor diferencia
+        </div>""", unsafe_allow_html=True)
+
         if "Código SKU" in contados.columns and len(contados) > 0:
             df_aj = contados[contados["Estado"].isin(["❌ Ajuste", "⚠ Revisar"])].copy()
             if df_aj.empty:
@@ -1549,11 +1649,11 @@ if menu == "📋 Indicadores de Almacén":
                 st.dataframe(
                     top_aj, use_container_width=True, hide_index=True,
                     column_config={
-                        "Stock WMS"    : st.column_config.NumberColumn(format="%d"),
-                        "Contado"      : st.column_config.NumberColumn(format="%d"),
-                        "Diferencia"   : st.column_config.NumberColumn(format="%+d"),
-                        "Veces ajuste" : st.column_config.NumberColumn(format="%d"),
-                        "ERI %"        : st.column_config.NumberColumn(format="%.1f%%"),
+                        "Stock WMS"   : st.column_config.NumberColumn(format="%d"),
+                        "Contado"     : st.column_config.NumberColumn(format="%d"),
+                        "Diferencia"  : st.column_config.NumberColumn(format="%+d"),
+                        "Veces ajuste": st.column_config.NumberColumn(format="%d"),
+                        "ERI %"       : st.column_config.NumberColumn(format="%.1f%%"),
                     }
                 )
 
