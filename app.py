@@ -1730,41 +1730,42 @@ if menu == "📋 Indicadores de Almacén":
 *{{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif;}}
 html,body{{width:100%;height:100%;background:#f0faf4;overflow:hidden;}}
 #wrap{{width:100vw;height:100vh;display:flex;flex-direction:column;
-       padding:16px 24px 14px;gap:12px;background:#f4fbf7;}}
+       padding:14px 22px 12px;gap:10px;background:#f4fbf7;}}
 /* HEADER */
 #hdr{{display:flex;align-items:center;justify-content:space-between;
-      background:#fff;border-radius:14px;padding:12px 24px;
+      background:#fff;border-radius:14px;padding:10px 22px;
       border-bottom:4px solid #c8e06a;
-      box-shadow:0 2px 12px rgba(26,122,74,0.1);flex-shrink:0;}}
-#hdr img{{height:50px;object-fit:contain;}}
-#hdr-mid{{text-align:center;flex:1;padding:0 24px;}}
-#hdr-mid .title{{color:#1a7a4a;font-size:1.25rem;font-weight:800;letter-spacing:.2px;}}
-#hdr-mid .sub{{color:#aaa;font-size:11px;font-weight:500;margin-top:3px;}}
-/* KPI ROW */
-#kpi-row{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;flex-shrink:0;height:115px;}}
-.kpi-card{{background:#fff;border-radius:12px;padding:14px 16px;
-           border-left:5px solid #2d9e6b;
-           box-shadow:0 2px 10px rgba(0,0,0,0.05);
+      box-shadow:0 2px 12px rgba(26,122,74,0.1);flex-shrink:0;height:72px;}}
+#hdr img{{height:46px;object-fit:contain;}}
+#hdr-mid{{text-align:center;flex:1;padding:0 20px;}}
+#hdr-mid .title{{color:#1a7a4a;font-size:1.5rem;font-weight:900;letter-spacing:.2px;}}
+#hdr-mid .sub{{color:#aaa;font-size:12px;font-weight:500;margin-top:2px;}}
+/* KPI ROW — altura fija grande como Power BI */
+#kpi-row{{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex-shrink:0;height:145px;}}
+.kpi-card{{background:#fff;border-radius:14px;padding:16px 20px;
+           border-left:6px solid #2d9e6b;
+           box-shadow:0 3px 12px rgba(0,0,0,0.06);
            display:flex;flex-direction:column;justify-content:space-between;}}
-.kpi-icon{{font-size:16px;}}
-.kpi-name{{font-size:9.5px;font-weight:800;text-transform:uppercase;
-           letter-spacing:.7px;color:#999;margin-top:1px;}}
-.kpi-formula{{font-size:8.5px;color:#ccc;margin-top:1px;}}
-.kpi-val{{font-size:26px;font-weight:900;line-height:1.1;}}
-.kpi-sub{{font-size:9.5px;color:#bbb;padding-top:5px;border-top:1px solid #f5f5f5;}}
-/* CHARTS ROW */
-#charts-row{{display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1;min-height:0;}}
-.chart-card{{background:#fff;border-radius:12px;padding:14px 16px 10px;
-             box-shadow:0 2px 10px rgba(0,0,0,0.05);
-             display:flex;flex-direction:column;border-top:3px solid #e8f5ee;}}
-.chart-title{{font-size:11.5px;font-weight:700;color:#1a7a4a;
-              margin-bottom:4px;flex-shrink:0;letter-spacing:.1px;}}
-.chart-sub{{font-size:10px;color:#bbb;margin-bottom:8px;flex-shrink:0;}}
+.kpi-top{{display:flex;align-items:center;gap:8px;}}
+.kpi-icon{{font-size:20px;}}
+.kpi-name{{font-size:11px;font-weight:800;text-transform:uppercase;
+           letter-spacing:.7px;color:#888;}}
+.kpi-formula{{font-size:9px;color:#ccc;margin-top:2px;}}
+.kpi-val{{font-size:36px;font-weight:900;line-height:1;margin-top:4px;}}
+.kpi-sub{{font-size:10.5px;color:#bbb;padding-top:6px;border-top:1px solid #f0f0f0;}}
+/* CHARTS ROW — menos alto, más compacto */
+#charts-row{{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:0;max-height:calc(100vh - 72px - 145px - 60px);}}
+.chart-card{{background:#fff;border-radius:14px;padding:14px 18px 8px;
+             box-shadow:0 3px 12px rgba(0,0,0,0.06);
+             display:flex;flex-direction:column;border-top:3px solid #c8e06a;}}
+.chart-title{{font-size:13px;font-weight:800;color:#1a7a4a;
+              margin-bottom:2px;flex-shrink:0;}}
+.chart-sub{{font-size:10px;color:#bbb;margin-bottom:6px;flex-shrink:0;}}
 .chart-div{{flex:1;min-height:0;}}
 /* FULLSCREEN BTN */
-#fsb{{position:fixed;bottom:18px;right:22px;
+#fsb{{position:fixed;bottom:16px;right:20px;
       background:linear-gradient(135deg,#1a7a4a,#2d9e6b);
-      border:none;border-radius:10px;padding:9px 20px;
+      border:none;border-radius:10px;padding:9px 22px;
       font-size:13px;font-weight:700;color:#fff;cursor:pointer;
       box-shadow:0 4px 14px rgba(26,122,74,0.35);z-index:9999;
       letter-spacing:.3px;}}
@@ -1787,33 +1788,37 @@ html,body{{width:100%;height:100%;background:#f0faf4;overflow:hidden;}}
   <!-- KPI ROW -->
   <div id="kpi-row">
     <div class="kpi-card" style="border-left-color:{_ec};">
-      <div><span class="kpi-icon">✅</span>
-        <div class="kpi-name">ERI — Exactitud Inventario</div>
-        <div class="kpi-formula">SKU correctos / Total auditados × 100</div>
+      <div class="kpi-top">
+        <span class="kpi-icon">✅</span>
+        <div><div class="kpi-name">ERI — Exactitud Inventario</div>
+          <div class="kpi-formula">SKU correctos / Total auditados × 100</div></div>
       </div>
       <div class="kpi-val" style="color:{_ec};">{eri:.1f}%</div>
       <div class="kpi-sub">{skus_ok} de {total_skus} SKUs ≥ 95%</div>
     </div>
     <div class="kpi-card" style="border-left-color:{_uc};">
-      <div><span class="kpi-icon">📍</span>
-        <div class="kpi-name">ERU — Exactitud Ubicaciones</div>
-        <div class="kpi-formula">Ubicaciones correctas / Total auditadas × 100</div>
+      <div class="kpi-top">
+        <span class="kpi-icon">📍</span>
+        <div><div class="kpi-name">ERU — Exactitud Ubicaciones</div>
+          <div class="kpi-formula">Ubicaciones correctas / Total auditadas × 100</div></div>
       </div>
       <div class="kpi-val" style="color:{_uc};">{eru:.1f}%</div>
       <div class="kpi-sub">{ok_ubic} OK de {total_contados} contados</div>
     </div>
     <div class="kpi-card" style="border-left-color:#2d9e6b;">
-      <div><span class="kpi-icon">📈</span>
-        <div class="kpi-name">Ajustes Positivos</div>
-        <div class="kpi-formula">Suma unidades sobrantes vs WMS</div>
+      <div class="kpi-top">
+        <span class="kpi-icon">📈</span>
+        <div><div class="kpi-name">Ajustes Positivos</div>
+          <div class="kpi-formula">Suma unidades sobrantes vs WMS</div></div>
       </div>
       <div class="kpi-val" style="color:#2d9e6b;">+{int(aj_pos):,}</div>
       <div class="kpi-sub">unidades contadas de más</div>
     </div>
-    <div class="kpi-card" style="border-left-color:#c0392b;background:#fff5f5;">
-      <div><span class="kpi-icon">📉</span>
-        <div class="kpi-name">Ajustes Negativos</div>
-        <div class="kpi-formula">Suma unidades faltantes vs WMS</div>
+    <div class="kpi-card" style="border-left-color:#c0392b;background:#fff8f8;">
+      <div class="kpi-top">
+        <span class="kpi-icon">📉</span>
+        <div><div class="kpi-name">Ajustes Negativos</div>
+          <div class="kpi-formula">Suma unidades faltantes vs WMS</div></div>
       </div>
       <div class="kpi-val" style="color:#c0392b;">{int(aj_neg):,}</div>
       <div class="kpi-sub">unidades contadas de menos</div>
