@@ -1454,14 +1454,14 @@ if menu == "📋 Indicadores de Almacén":
 
     # ── Título sección ─────────────────────────────────────────────────────
     st.markdown("""
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
       <div style="background:linear-gradient(135deg,#1a7a4a,#2d9e6b);border-radius:10px;
-                  padding:8px 14px;">
-        <span style="color:#fff;font-size:20px;">📋</span>
+                  padding:10px 16px;">
+        <span style="color:#fff;font-size:24px;">📋</span>
       </div>
       <div>
-        <div style="font-size:20px;font-weight:800;color:#1a7a4a;">Indicadores de Almacén</div>
-        <div style="font-size:12px;color:#aaa;font-weight:500;">LA CARCASA MOVIL · Inventario Cíclico</div>
+        <div style="font-size:28px;font-weight:900;color:#1a7a4a;">Indicadores de Almacén</div>
+        <div style="font-size:14px;color:#aaa;font-weight:500;">LA CARCASA MOVIL · Inventario Cíclico</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1472,24 +1472,29 @@ if menu == "📋 Indicadores de Almacén":
         st.warning("⚠️ Sin datos en el historial de Carcasas.")
     else:
         # ── Filtros ────────────────────────────────────────────────────────
-        col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
+        import datetime as _dt
+        _min_fecha = df_carc["Fecha"].min().date() if "Fecha" in df_carc.columns and len(df_carc) > 0 else _dt.date.today()
+        _max_fecha = df_carc["Fecha"].max().date() if "Fecha" in df_carc.columns and len(df_carc) > 0 else _dt.date.today()
+
+        col_f1, col_f2, col_f3 = st.columns([2, 2, 1])
         with col_f1:
-            if "Fecha" in df_carc.columns:
-                meses_disp = sorted(df_carc["Fecha"].dropna().dt.to_period("M").unique(), reverse=True)
-                meses_str  = ["Todos"] + [str(m) for m in meses_disp]
-                mes_sel    = st.selectbox("📅 Período", meses_str, key="ind_mes")
-            else:
-                mes_sel = "Todos"
+            fecha_ini = st.date_input("📅 Fecha inicio", value=_min_fecha,
+                                      min_value=_min_fecha, max_value=_max_fecha, key="ind_fini")
+        with col_f2:
+            fecha_fin = st.date_input("📅 Fecha fin", value=_max_fecha,
+                                      min_value=_min_fecha, max_value=_max_fecha, key="ind_ffin")
         with col_f3:
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("🔄 Actualizar datos", key="ind_refresh"):
+            if st.button("🔄 Actualizar", key="ind_refresh"):
                 st.cache_data.clear()
                 st.rerun()
 
-        # Aplicar filtro
+        # Aplicar filtro de rango de fechas
+        import pandas as _pd_f
         df = df_carc.copy()
-        if mes_sel != "Todos" and "Fecha" in df.columns:
-            df = df[df["Fecha"].dt.to_period("M").astype(str) == mes_sel]
+        if "Fecha" in df.columns:
+            df = df[(df["Fecha"].dt.date >= fecha_ini) & (df["Fecha"].dt.date <= fecha_fin)]
+        mes_sel = f"{fecha_ini.strftime('%d/%m/%Y')} — {fecha_fin.strftime('%d/%m/%Y')}"
 
         contados = df[df["Estado"] != "⏳ Pendiente"] if "Estado" in df.columns else df
 
@@ -1523,15 +1528,15 @@ if menu == "📋 Indicadores de Almacén":
                         border-left:5px solid {color};box-shadow:0 3px 12px rgba(0,0,0,0.07);
                         min-height:130px;display:flex;flex-direction:column;justify-content:space-between;">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                <span style="font-size:20px;">{icon}</span>
+                <span style="font-size:22px;">{icon}</span>
                 <div>
-                  <div style="font-size:12px;font-weight:800;color:{color};text-transform:uppercase;
+                  <div style="font-size:15px;font-weight:900;color:{color};text-transform:uppercase;
                               letter-spacing:.6px;">{label}</div>
-                  <div style="font-size:10px;color:#aaa;">{formula}</div>
+                  <div style="font-size:11px;color:#aaa;">{formula}</div>
                 </div>
               </div>
-              <div style="font-size:32px;font-weight:900;color:{color};line-height:1;">{value}</div>
-              <div style="font-size:11px;color:#888;margin-top:6px;padding-top:6px;
+              <div style="font-size:34px;font-weight:900;color:{color};line-height:1;">{value}</div>
+              <div style="font-size:12px;color:#888;margin-top:6px;padding-top:6px;
                           border-top:1px solid rgba(0,0,0,0.06);">{sub}</div>
             </div>""", unsafe_allow_html=True)
 
@@ -1581,8 +1586,6 @@ if menu == "📋 Indicadores de Almacén":
                         textfont=dict(size=10, color="#1a7a4a"),
                         hovertemplate="<b>%{x}</b><br>ERI: %{y:.1f}%<extra></extra>",
                     ))
-                    fig_eri_line.add_hline(y=85, line_dash="dot", line_color="#2d9e6b", opacity=0.5,
-                                           annotation_text="Meta 85%", annotation_font_color="#2d9e6b")
                     fig_eri_line.update_layout(
                         height=240,
                         xaxis=dict(gridcolor="#e8f5ee", color="#888", title=""),
@@ -1608,33 +1611,26 @@ if menu == "📋 Indicadores de Almacén":
                     ev["ERU %"] = (ev["OK"] / ev["Contados"] * 100).round(1)
 
                     fig_ev = go.Figure()
-                    fig_ev.add_trace(go.Bar(
-                        x=ev["Fecha"], y=ev["Contados"],
-                        name="Filas contadas",
-                        marker_color="rgba(45,158,107,0.18)",
-                        yaxis="y2",
-                    ))
                     fig_ev.add_trace(go.Scatter(
                         x=ev["Fecha"], y=ev["ERU %"],
                         name="ERU %",
-                        mode="lines+markers",
-                        line=dict(color="#1a7a4a", width=2.5),
-                        marker=dict(color="#1a7a4a", size=7),
+                        mode="lines+markers+text",
+                        line=dict(color="#2d9e6b", width=2.5),
+                        marker=dict(color="#2d9e6b", size=7,
+                                    line=dict(color="#fff", width=1.5)),
+                        text=ev["ERU %"].apply(lambda v: f"{v:.1f}%"),
+                        textposition="top center",
+                        textfont=dict(size=10, color="#2d9e6b"),
                         hovertemplate="<b>%{x}</b><br>ERU: %{y:.1f}%<extra></extra>",
                     ))
-                    fig_ev.add_hline(y=85, line_dash="dot", line_color="#2d9e6b", opacity=0.5,
-                                     annotation_text="Meta 85%", annotation_font_color="#2d9e6b")
                     fig_ev.update_layout(
                         height=240,
-                        xaxis=dict(gridcolor="#e8f5ee", color="#888", title=""),
-                        yaxis=dict(title="ERU %", range=[0, 105], ticksuffix="%",
+                        xaxis=dict(gridcolor="#e8f5ee", color="#888", title="", showgrid=False),
+                        yaxis=dict(title="ERU %", range=[0, 110], ticksuffix="%",
                                    gridcolor="#e8f5ee", color="#888"),
-                        yaxis2=dict(title="Filas", overlaying="y", side="right",
-                                    color="#aaa", gridcolor="rgba(0,0,0,0)"),
                         plot_bgcolor="white", paper_bgcolor="white",
                         font=dict(family="Arial", size=11),
-                        legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                                    bgcolor="rgba(0,0,0,0)"),
+                        showlegend=False,
                         margin=dict(l=10, r=10, t=30, b=10),
                     )
                     st.plotly_chart(fig_ev, use_container_width=True, key="evol_eru")
@@ -1907,17 +1903,8 @@ function mkChart(divId, dates, vals, color, label) {{
       tickfont:{{size:10,color:"#888"}},
       zeroline:false, linecolor:"#e0e0e0", linewidth:1
     }},
-    shapes: [{{
-      type:"line", xref:"paper", x0:0, x1:1,
-      y0:85, y1:85,
-      line:{{color:"#2d9e6b", width:1.5, dash:"dot"}}
-    }}],
-    annotations: [{{
-      xref:"paper", x:1, y:85,
-      xanchor:"right", yanchor:"bottom",
-      text:"Meta 85%", showarrow:false,
-      font:{{size:10, color:"#2d9e6b", family:"Segoe UI,Arial"}}
-    }}]
+    shapes: [],
+    annotations: []
   }}, {{displayModeBar:false, responsive:false}});
 }}
 
