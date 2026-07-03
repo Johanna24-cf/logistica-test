@@ -1657,6 +1657,244 @@ if menu == "📋 Indicadores de Almacén":
                     }
                 )
 
+        # ── BOTÓN PRESENTACIÓN INDICADORES ────────────────────────────────
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.divider()
+
+        _KEY_PPT = "ppt_indicadores"
+        _KEY_HTML = "ppt_indicadores_html"
+        if _KEY_PPT not in st.session_state:
+            st.session_state[_KEY_PPT] = False
+
+        _lbl = "⬇️ Cerrar presentación" if st.session_state[_KEY_PPT] else "🖥️ Ver presentación: Indicadores de Almacén"
+        if st.button(_lbl, key="btn_ppt_ind"):
+            st.session_state[_KEY_PPT] = not st.session_state[_KEY_PPT]
+            if st.session_state[_KEY_PPT]:
+                import plotly.io as _pio, json as _json
+
+                # Calcular ERI evolutivo
+                _eri_dates, _eri_vals = [], []
+                _eru_dates, _eru_vals = [], []
+                if "Fecha" in contados.columns and len(contados) > 0:
+                    _ev = contados.groupby(contados["Fecha"].dt.date).agg(
+                        Contados=("Estado","count"),
+                        OK=("Estado", lambda x: (x=="✅ OK").sum()),
+                    ).reset_index()
+                    _ev.columns = ["Fecha","Contados","OK"]
+                    _ev["ERU"] = (_ev["OK"]/_ev["Contados"]*100).round(1)
+                    _eru_dates = [str(d) for d in _ev["Fecha"]]
+                    _eru_vals  = _ev["ERU"].tolist()
+
+                if "Fecha" in contados.columns and "Código SKU" in contados.columns and len(contados) > 0:
+                    _ev2 = []
+                    for _d, _grp in contados.groupby(contados["Fecha"].dt.date):
+                        _ps = _grp.groupby("Código SKU").agg(tc=("Contado","sum"),tw=("Stock WMS","sum")).reset_index()
+                        _ps = _ps[_ps["tw"]>0]
+                        _ps["e"] = (1-(_ps["tc"]-_ps["tw"]).abs()/_ps["tw"]).clip(lower=0)
+                        _ev2.append({"d":str(_d),"e":round(_ps["e"].mean()*100,1) if len(_ps)>0 else 0})
+                    _eri_dates = [x["d"] for x in _ev2]
+                    _eri_vals  = [x["e"] for x in _ev2]
+
+                # Logos b64
+                _lc = _b64_img("CARCASAS.png")
+                _lcf= _b64_img("CARGOFLEX.png")
+                _img_c  = f'data:image/png;base64,{_lc}' if _lc else ""
+                _img_cf2= f'data:image/png;base64,{_lcf}' if _lcf else ""
+
+                # Colores semáforo
+                _ec = "#2d9e6b" if eri>=85 else ("#e8a020" if eri>=60 else "#c0392b")
+                _uc = "#2d9e6b" if eru>=85 else ("#e8a020" if eru>=60 else "#c0392b")
+
+                _html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif;}}
+html,body{{width:100%;height:100%;background:#f0faf4;overflow:hidden;}}
+#wrap{{width:100vw;height:100vh;display:flex;flex-direction:column;padding:14px 20px 10px;gap:10px;}}
+/* HEADER */
+#hdr{{display:flex;align-items:center;justify-content:space-between;
+      background:#fff;border-radius:12px;padding:10px 20px;
+      border-bottom:4px solid #c8e06a;box-shadow:0 2px 8px rgba(0,0,0,0.06);flex-shrink:0;}}
+#hdr img{{height:52px;object-fit:contain;}}
+#hdr-mid{{text-align:center;flex:1;padding:0 20px;}}
+#hdr-mid .title{{color:#1a7a4a;font-size:1.3rem;font-weight:800;letter-spacing:.3px;}}
+#hdr-mid .sub{{color:#aaa;font-size:11px;font-weight:500;margin-top:2px;}}
+/* KPI ROW */
+#kpi-row{{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex-shrink:0;}}
+.kpi-card{{background:#fff;border-radius:12px;padding:12px 16px;
+           border-left:5px solid #2d9e6b;box-shadow:0 2px 8px rgba(0,0,0,0.05);
+           display:flex;flex-direction:column;justify-content:space-between;}}
+.kpi-icon{{font-size:18px;}}
+.kpi-name{{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#888;margin-top:2px;}}
+.kpi-formula{{font-size:9px;color:#bbb;margin-top:1px;}}
+.kpi-val{{font-size:28px;font-weight:900;line-height:1.1;margin-top:6px;}}
+.kpi-sub{{font-size:10px;color:#aaa;margin-top:4px;padding-top:4px;border-top:1px solid #f0f0f0;}}
+/* CHARTS ROW */
+#charts-row{{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:0;}}
+.chart-card{{background:#fff;border-radius:12px;padding:12px 14px;
+             box-shadow:0 2px 8px rgba(0,0,0,0.05);display:flex;flex-direction:column;}}
+.chart-title{{font-size:12px;font-weight:700;color:#1a7a4a;margin-bottom:6px;flex-shrink:0;}}
+.chart-div{{flex:1;min-height:0;}}
+/* FULLSCREEN BTN */
+#fsb{{position:fixed;bottom:16px;right:20px;
+      background:linear-gradient(135deg,#2d9e6b,#c8e06a);
+      border:none;border-radius:8px;padding:8px 18px;
+      font-size:13px;font-weight:700;color:#0d1f16;cursor:pointer;
+      box-shadow:0 3px 10px rgba(45,158,107,0.3);z-index:9999;}}
+#fsb:hover{{opacity:.9;}}
+</style>
+</head>
+<body>
+<div id="wrap">
+
+  <!-- HEADER -->
+  <div id="hdr">
+    <div>{"<img src='" + _img_c + "' />" if _img_c else ""}</div>
+    <div id="hdr-mid">
+      <div class="title">📋 Indicadores de Almacén — LA CARCASA MOVIL</div>
+      <div class="sub">Inventario Cíclico · Cargoflex Supply · {mes_sel}</div>
+    </div>
+    <div>{"<img src='" + _img_cf2 + "' />" if _img_cf2 else ""}</div>
+  </div>
+
+  <!-- KPI ROW -->
+  <div id="kpi-row">
+    <div class="kpi-card" style="border-left-color:{_ec};">
+      <div><span class="kpi-icon">✅</span>
+        <div class="kpi-name">ERI — Exactitud Inventario</div>
+        <div class="kpi-formula">SKU correctos / Total auditados × 100</div>
+      </div>
+      <div class="kpi-val" style="color:{_ec};">{eri:.1f}%</div>
+      <div class="kpi-sub">{skus_ok} de {total_skus} SKUs ≥ 95%</div>
+    </div>
+    <div class="kpi-card" style="border-left-color:{_uc};">
+      <div><span class="kpi-icon">📍</span>
+        <div class="kpi-name">ERU — Exactitud Ubicaciones</div>
+        <div class="kpi-formula">Ubicaciones correctas / Total auditadas × 100</div>
+      </div>
+      <div class="kpi-val" style="color:{_uc};">{eru:.1f}%</div>
+      <div class="kpi-sub">{ok_ubic} OK de {total_contados} contados</div>
+    </div>
+    <div class="kpi-card" style="border-left-color:#2d9e6b;">
+      <div><span class="kpi-icon">📈</span>
+        <div class="kpi-name">Ajustes Positivos</div>
+        <div class="kpi-formula">Suma unidades sobrantes vs WMS</div>
+      </div>
+      <div class="kpi-val" style="color:#2d9e6b;">+{int(aj_pos):,}</div>
+      <div class="kpi-sub">unidades contadas de más</div>
+    </div>
+    <div class="kpi-card" style="border-left-color:#c0392b;background:#fff5f5;">
+      <div><span class="kpi-icon">📉</span>
+        <div class="kpi-name">Ajustes Negativos</div>
+        <div class="kpi-formula">Suma unidades faltantes vs WMS</div>
+      </div>
+      <div class="kpi-val" style="color:#c0392b;">{int(aj_neg):,}</div>
+      <div class="kpi-sub">unidades contadas de menos</div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW -->
+  <div id="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">📊 Evolución diaria — ERI (Exactitud por SKU)</div>
+      <div class="chart-div" id="chart-eri"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">📊 Evolución diaria — ERU (Exactitud por Ubicación)</div>
+      <div class="chart-div" id="chart-eru"></div>
+    </div>
+  </div>
+
+</div>
+
+<button id="fsb" onclick="toggleFS()">⛶ Pantalla completa</button>
+
+<script>
+var eriDates = {_json.dumps(_eri_dates)};
+var eriVals  = {_json.dumps(_eri_vals)};
+var eruDates = {_json.dumps(_eru_dates)};
+var eruVals  = {_json.dumps(_eru_vals)};
+
+function mkChart(divId, dates, vals, color, label) {{
+  var el = document.getElementById(divId);
+  if (!el || !dates.length) return;
+  var W = el.clientWidth || 400;
+  var H = el.clientHeight || 200;
+  Plotly.newPlot(divId, [
+    {{
+      type: "scatter", mode: "lines+markers",
+      x: dates, y: vals,
+      name: label,
+      line: {{color: color, width: 3}},
+      marker: {{color: color, size: 8}},
+      fill: "tozeroy",
+      fillcolor: color.replace(")", ",0.08)").replace("rgb","rgba"),
+      hovertemplate: "<b>%{{x}}</b><br>" + label + ": %{{y:.1f}}%<extra></extra>"
+    }}
+  ], {{
+    autosize: false, width: W, height: H,
+    paper_bgcolor: "#ffffff", plot_bgcolor: "#ffffff",
+    margin: {{l:45,r:15,t:10,b:55}},
+    font: {{family:"Segoe UI,Arial", size:11}},
+    xaxis: {{showgrid:false, tickfont:{{size:10}}, tickangle:-30}},
+    yaxis: {{range:[0,105], ticksuffix:"%", gridcolor:"#f0faf4",
+             tickfont:{{size:10}}}},
+    shapes: [{{
+      type:"line", x0:dates[0]||0, x1:dates[dates.length-1]||1,
+      y0:85, y1:85,
+      line:{{color:"#2d9e6b", width:1.5, dash:"dot"}}
+    }}],
+    annotations: [{{
+      x:dates[dates.length-1]||1, y:85,
+      xanchor:"right", yanchor:"bottom",
+      text:"Meta 85%", showarrow:false,
+      font:{{size:10, color:"#2d9e6b"}}
+    }}]
+  }}, {{displayModeBar:false}});
+}}
+
+function renderCharts() {{
+  mkChart("chart-eri", eriDates, eriVals, "#1a7a4a", "ERI %");
+  mkChart("chart-eru", eruDates, eruVals, "#2d9e6b", "ERU %");
+}}
+
+function toggleFS() {{
+  var el = document.documentElement;
+  if (document.fullscreenElement) {{
+    document.exitFullscreen();
+    document.getElementById("fsb").textContent = "⛶ Pantalla completa";
+    setTimeout(renderCharts, 300);
+  }} else {{
+    el.requestFullscreen && el.requestFullscreen().then(function(){{
+      document.getElementById("fsb").textContent = "⊠ Salir";
+      setTimeout(renderCharts, 300);
+    }});
+  }}
+}}
+
+document.addEventListener("keydown", function(e){{
+  if(e.key==="f"||e.key==="F") toggleFS();
+}});
+
+window.addEventListener("resize", function(){{
+  clearTimeout(window._rt);
+  window._rt = setTimeout(renderCharts, 200);
+}});
+
+setTimeout(renderCharts, 120);
+</script>
+</body>
+</html>"""
+                st.session_state[_KEY_HTML] = _html
+            st.rerun()
+
+        if st.session_state.get(_KEY_PPT) and _KEY_HTML in st.session_state:
+            import streamlit.components.v1 as _comp
+            _comp.html(st.session_state[_KEY_HTML], height=820, scrolling=False)
+
 # ----------------------------------------------------------
 # SINCRONIZAR
 # ----------------------------------------------------------
