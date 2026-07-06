@@ -17,6 +17,7 @@ st.set_page_config(page_title="Sistema Logístico Carcasas", page_icon="📦", l
 
 # 2. LOGO Y ESTILOS
 def cargar_estilos():
+    # NOTA: Asegúrate de que NO haya una 'f' antes de las comillas triples de abajo
     st.markdown("""
         <style>
         /* ── Paleta global verde → amarillo ── */
