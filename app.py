@@ -428,7 +428,7 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
         st.rerun()
 
     if st.session_state.get(key_show) and key_html in st.session_state:
-        components.html(st.session_state[key_html], height=860, scrolling=False)
+        components.html(st.session_state[key_html], height=780, scrolling=False)
 
 
 def _ppt_template():
@@ -441,17 +441,17 @@ def _ppt_template():
 <style>
   * { box-sizing:border-box; margin:0; padding:0; }
   html, body { width:100%; height:100%; background:#f0faf4; font-family:Arial,sans-serif; overflow:hidden; }
-  #wrap { width:100%; height:100vh; display:flex; flex-direction:column; padding:10px 20px 10px; gap:8px; }
-  #hdr { display:flex; align-items:center; justify-content:space-between; background:#fff; border-radius:12px; border:2px solid #2d9e6b; padding:8px 20px; flex-shrink:0; }
+  #wrap { width:100%; height:100vh; display:flex; flex-direction:column; padding:6px 12px 6px; gap:5px; }
+  #hdr { display:none; }
   .logo-w { width:190px; display:flex; align-items:center; }
   .logo-w.r { justify-content:flex-end; }
   #titulo { color:#1a7a4a; font-size:1.5rem; font-weight:800; text-align:center; flex:1; padding:0 10px; }
-  #pw { width:100%; height:5px; background:#c8e06a; border-radius:3px; flex-shrink:0; }
-  #pb { height:5px; background:#1a7a4a; border-radius:3px; width:0%; }
-  #body { flex:1; min-height:0; border:3px solid #2d9e6b; border-radius:14px; background:#fff; overflow:hidden; display:flex; align-items:stretch; }
+  #pw { width:100%; height:4px; background:#c8e06a; border-radius:3px; flex-shrink:0; }
+  #pb { height:4px; background:#1a7a4a; border-radius:3px; width:0%; }
+  #body { flex:1; min-height:0; border:2px solid #2d9e6b; border-radius:12px; background:#fff; overflow:hidden; display:flex; align-items:stretch; }
   #plt-div { width:100%; height:100%; }
   #html-div { width:100%; height:100%; overflow:hidden; display:none; }
-  #footer { display:flex; align-items:center; justify-content:space-between; background:#fff; border-radius:12px; border:2px solid #c8e06a; padding:6px 16px; flex-shrink:0; }
+  #footer { display:flex; align-items:center; justify-content:space-between; background:#fff; border-radius:10px; border:1.5px solid #c8e06a; padding:4px 14px; flex-shrink:0; }
   #dots { display:flex; gap:8px; align-items:center; }
   #dots span { width:10px; height:10px; border-radius:50%; display:inline-block; cursor:pointer; background:#c8e06a; border:2px solid #2d9e6b; transition:all 0.25s; }
   #dots span.on { background:#1a7a4a; transform:scale(1.35); }
@@ -1151,31 +1151,11 @@ if menu == "📦 Importaciones":
             _img_cf_ap = f'<img src="data:image/png;base64,{_lcf_ap}" style="height:100%;max-height:70px;object-fit:contain;">' if _lcf_ap else ""
 
             apertura_slide = (
-                '<div style="width:100vw;height:100vh;display:flex;flex-direction:column;'
-                'padding:12px 20px 10px;gap:8px;background:#f4fbf7;box-sizing:border-box;overflow:hidden;'
-                'font-family:Arial,sans-serif;">'
-
-                # Header compacto — logos + título, sin duplicar
-                + '<div style="display:flex;align-items:center;justify-content:space-between;'
-                  'background:#fff;border-radius:14px;padding:0 22px;'
-                  'border-bottom:4px solid #c8e06a;'
-                  'box-shadow:0 2px 10px rgba(26,122,74,0.08);'
-                  'flex:0 0 calc(18vh - 10px);">'
-                  + '<div style="height:100%;display:flex;align-items:center;">' + _img_c_ap + '</div>'
-                  + '<div style="text-align:center;">'
-                    '<div style="font-size:clamp(1rem,2.2vh,1.7rem);font-weight:900;color:#1a7a4a;">'
-                    '🏪 Próximas Aperturas de Tiendas</div>'
-                    '<div style="font-size:clamp(9px,1.2vh,13px);color:#aaa;margin-top:2px;">'
-                    'LA CARCASA MOVIL · Cargoflex Supply</div>'
-                    '</div>'
-                  + '<div style="height:100%;display:flex;align-items:center;">' + _img_cf_ap + '</div>'
-                  + '</div>'
-
-                # Cards grid — 4 cards en grid 2x2, compactas y proporcionales
-                + '<div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;'
-                  'gap:10px;flex:1;min-height:0;">'
+                # Sin header interno — el wrapper de Streamlit ya tiene logos y título
+                '<div style="width:100%;height:100%;display:grid;'
+                'grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;'
+                'gap:12px;padding:14px;background:#f4fbf7;box-sizing:border-box;">'
                 + cards
-                + '</div>'
                 + '</div>'
             )
 
@@ -1349,25 +1329,10 @@ if menu == "📦 Importaciones":
             _img_cf_st = f'<img src="data:image/png;base64,{_lcf_st}" style="height:100%;max-height:70px;object-fit:contain;">' if _lcf_st else ""
 
             status_slide = (
-                '<div style="width:100vw;height:100vh;display:flex;flex-direction:column;'
-                'padding:12px 20px 10px;gap:8px;background:#f4fbf7;box-sizing:border-box;'
+                # Sin header interno — el wrapper de Streamlit ya tiene logos y título
+                '<div style="width:100%;height:100%;display:flex;flex-direction:column;'
+                'padding:12px 16px 10px;gap:8px;background:#f4fbf7;box-sizing:border-box;'
                 'font-family:Arial,sans-serif;overflow:hidden;">'
-
-                # Header compacto — logos + título, sin duplicar
-                + '<div style="display:flex;align-items:center;justify-content:space-between;'
-                  'background:#fff;border-radius:14px;padding:0 22px;'
-                  'border-bottom:4px solid #c8e06a;'
-                  'box-shadow:0 2px 10px rgba(26,122,74,0.08);'
-                  'flex:0 0 calc(18vh - 10px);">'
-                  + '<div style="height:100%;display:flex;align-items:center;">' + _img_c_st + '</div>'
-                  + '<div style="text-align:center;">'
-                    '<div style="font-size:clamp(1rem,2.2vh,1.7rem);font-weight:900;color:#1a7a4a;">'
-                    '📊 Status Global Importaciones</div>'
-                    '<div style="font-size:clamp(9px,1.2vh,13px);color:#aaa;margin-top:2px;">'
-                    'LA CARCASA MOVIL · Cargoflex Supply</div>'
-                    '</div>'
-                  + '<div style="height:100%;display:flex;align-items:center;">' + _img_cf_st + '</div>'
-                  + '</div>'
 
                 # KPIs — compactos ~24vh
                 + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;'
