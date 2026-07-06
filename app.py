@@ -1125,15 +1125,16 @@ if menu == "📦 Importaciones":
         # ══════════════════════════════════════════════════════
         def _card_ap(tienda, desc, fecha):
             return (
-                '<div style="background:#fff;border-radius:16px;border-left:6px solid #2d9e6b;'
-                'padding:28px 30px;box-shadow:0 4px 16px rgba(45,158,107,0.13);'
-                'display:flex;flex-direction:column;justify-content:space-between;">'
+                '<div style="background:#fff;border-radius:12px;border-left:5px solid #2d9e6b;'
+                'padding:clamp(10px,1.8vh,20px) clamp(14px,2vw,24px);'
+                'box-shadow:0 2px 10px rgba(45,158,107,0.10);'
+                'display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;">'
                 '<div>'
-                '<div style="color:#1a7a4a;font-size:1.5rem;font-weight:800;margin-bottom:10px;">🏪 ' + tienda + '</div>'
-                '<div style="color:#636e72;font-size:1.05em;line-height:1.5;">' + desc + '</div>'
+                '<div style="color:#1a7a4a;font-size:clamp(1rem,2.5vh,1.6rem);font-weight:800;margin-bottom:6px;">🏪 ' + tienda + '</div>'
+                '<div style="color:#636e72;font-size:clamp(0.8rem,1.5vh,1rem);line-height:1.4;">' + desc + '</div>'
                 '</div>'
-                '<div style="color:#e8a020;font-weight:700;font-size:1.1em;margin-top:20px;'
-                'padding-top:14px;border-top:2px solid #f0faf4;">📅 ' + fecha + '</div>'
+                '<div style="color:#e8a020;font-weight:700;font-size:clamp(0.85rem,1.6vh,1.05rem);'
+                'margin-top:10px;padding-top:10px;border-top:1.5px solid #f0faf4;">📅 ' + fecha + '</div>'
                 '</div>'
             )
 
@@ -1150,33 +1151,31 @@ if menu == "📦 Importaciones":
             _img_cf_ap = f'<img src="data:image/png;base64,{_lcf_ap}" style="height:100%;max-height:70px;object-fit:contain;">' if _lcf_ap else ""
 
             apertura_slide = (
-                # Outer wrapper
                 '<div style="width:100vw;height:100vh;display:flex;flex-direction:column;'
-                'padding:14px 22px 12px;gap:10px;background:#f4fbf7;box-sizing:border-box;overflow:hidden;'
+                'padding:12px 20px 10px;gap:8px;background:#f4fbf7;box-sizing:border-box;overflow:hidden;'
                 'font-family:Arial,sans-serif;">'
 
-                # Header — ~20vh compacto
+                # Header compacto — logos + título, sin duplicar
                 + '<div style="display:flex;align-items:center;justify-content:space-between;'
-                  'background:#fff;border-radius:14px;padding:0 24px;'
+                  'background:#fff;border-radius:14px;padding:0 22px;'
                   'border-bottom:4px solid #c8e06a;'
-                  'box-shadow:0 2px 12px rgba(26,122,74,0.1);'
-                  'flex:0 0 calc(20vh - 12px);">'
-                  + '<div>' + _img_c_ap + '</div>'
+                  'box-shadow:0 2px 10px rgba(26,122,74,0.08);'
+                  'flex:0 0 calc(18vh - 10px);">'
+                  + '<div style="height:100%;display:flex;align-items:center;">' + _img_c_ap + '</div>'
                   + '<div style="text-align:center;">'
-                    '<div style="font-size:clamp(1.1rem,2.5vh,2rem);font-weight:900;color:#1a7a4a;">'
+                    '<div style="font-size:clamp(1rem,2.2vh,1.7rem);font-weight:900;color:#1a7a4a;">'
                     '🏪 Próximas Aperturas de Tiendas</div>'
-                    '<div style="font-size:clamp(10px,1.3vh,14px);color:#aaa;margin-top:3px;">'
+                    '<div style="font-size:clamp(9px,1.2vh,13px);color:#aaa;margin-top:2px;">'
                     'LA CARCASA MOVIL · Cargoflex Supply</div>'
                     '</div>'
-                  + '<div>' + _img_cf_ap + '</div>'
+                  + '<div style="height:100%;display:flex;align-items:center;">' + _img_cf_ap + '</div>'
                   + '</div>'
 
-                # Cards grid — resto del espacio
+                # Cards grid — 4 cards en grid 2x2, compactas y proporcionales
                 + '<div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;'
-                  'gap:14px;flex:1;min-height:0;">'
+                  'gap:10px;flex:1;min-height:0;">'
                 + cards
                 + '</div>'
-
                 + '</div>'
             )
 
@@ -1273,38 +1272,40 @@ if menu == "📦 Importaciones":
                 canal_b = ""
                 if canal in ("ROJO","VERDE"):
                     cb,ct = ("#fff3e0","#854F0B") if canal=="ROJO" else ("#eaf3de","#3B6D11")
-                    canal_b = f'<span style="font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;background:{cb};color:{ct};">{canal}</span>'
+                    canal_b = f'<span style="font-size:clamp(9px,1vh,11px);font-weight:600;padding:1px 5px;border-radius:4px;background:{cb};color:{ct};">{canal}</span>'
                 fecha = ""
                 for fk in ("ETA","Fecha Llegada","Fecha ETD"):
                     if fk in row and str(row.get(fk,"")) not in ("nan","None","—",""):
-                        fecha = f'<span style="font-size:11px;color:#aaa;">{str(row[fk])}</span>'
+                        fecha = f'<span style="font-size:clamp(9px,1vh,11px);color:#aaa;">{str(row[fk])}</span>'
                         break
                 bl = f'border-left:3px solid {col_line};border-radius:0 8px 8px 0;' if tipo=="pend" else "border-radius:8px;"
                 return (
-                    f'<div style="background:#fff;{bl}border:0.5px solid #e0ede6;'
-                    f'padding:10px 12px;margin-bottom:6px;">'
+                    f'<div style="background:#fff;{bl}border:0.5px solid #ddeae0;'
+                    f'padding:7px 10px;margin-bottom:5px;flex-shrink:0;">'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;">'
-                    f'<span style="font-size:14px;font-weight:500;color:#1a1a1a;">{ap}</span>{canal_b}</div>'
-                    f'<div style="height:0.5px;background:#f0f0f0;margin:5px 0;"></div>'
-                    f'<div style="display:flex;align-items:center;justify-content:space-between;">'
-                    f'<span style="font-size:12px;color:#888;">📦 {asn} ASNs</span>{fecha}</div>'
+                    f'<span style="font-size:clamp(11px,1.3vh,14px);font-weight:600;color:#1a1a1a;">{ap}</span>{canal_b}</div>'
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:3px;">'
+                    f'<span style="font-size:clamp(10px,1.1vh,12px);color:#888;">📦 {asn} ASNs</span>{fecha}</div>'
                     f'</div>'
                 )
 
             def _ppt_col(titulo, dot_color, n, bg_b, txt_b, tickets, total_asn, scroll=False):
-                sc = "max-height:580px;overflow-y:auto;" if scroll else ""
+                # Todas las columnas tienen altura uniforme — fill del flex container
+                # Solo supply tiene scroll interno
+                sc = "flex:1;min-height:0;overflow-y:auto;" if scroll else "flex:1;min-height:0;overflow-y:hidden;"
                 return (
-                    f'<div style="background:#f7faf8;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px;">'
+                    f'<div style="background:#f0f7f2;border-radius:12px;padding:10px 10px 8px;'
+                    f'display:flex;flex-direction:column;gap:6px;min-height:0;">'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;'
-                    f'padding-bottom:8px;border-bottom:0.5px solid #e0ede6;margin-bottom:4px;">'
+                    f'padding-bottom:7px;border-bottom:0.5px solid #d8eae0;flex-shrink:0;">'
                     f'<div style="display:flex;align-items:center;gap:6px;">'
-                    f'<span style="width:10px;height:10px;border-radius:50%;background:{dot_color};display:inline-block;"></span>'
-                    f'<span style="font-size:14px;font-weight:600;color:#444;">{titulo}</span></div>'
-                    f'<span style="font-size:12px;padding:3px 10px;border-radius:99px;background:{bg_b};color:{txt_b};font-weight:500;">{n}</span>'
+                    f'<span style="width:9px;height:9px;border-radius:50%;background:{dot_color};display:inline-block;"></span>'
+                    f'<span style="font-size:clamp(11px,1.4vh,15px);font-weight:700;color:#333;">{titulo}</span></div>'
+                    f'<span style="font-size:clamp(10px,1.2vh,13px);padding:2px 9px;border-radius:99px;background:{bg_b};color:{txt_b};font-weight:600;">{n}</span>'
                     f'</div>'
                     f'<div style="{sc}">{tickets}</div>'
-                    f'<div style="font-size:12px;color:#aaa;text-align:right;padding-top:5px;'
-                    f'border-top:0.5px solid #e8ede9;">{total_asn} ASNs total</div>'
+                    f'<div style="font-size:clamp(10px,1.1vh,12px);color:#aaa;text-align:right;padding-top:4px;'
+                    f'border-top:0.5px solid #d8eae0;flex-shrink:0;">{total_asn} ASNs total</div>'
                     f'</div>'
                 )
 
@@ -1332,7 +1333,8 @@ if menu == "📦 Importaciones":
             _th_sup, _ta_sup = _mk(_ppt_grupos["supply"], "arr")
 
             _pipeline_ppt = (
-                '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;flex:1;min-height:0;">'
+                '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));'
+                'gap:10px;flex:1;min-height:0;align-items:stretch;">'
                 + _ppt_col("Sin estado",  "#888780", len(_ppt_grupos["sin"]),      "#F1EFE8","#444441", _th_sin, _ta_sin)
                 + _ppt_col("En tránsito", "#378ADD", len(_ppt_grupos["transito"]), "#E6F1FB","#185FA5", _th_tra, _ta_tra)
                 + _ppt_col("Aduanas",     "#EF9F27", len(_ppt_grupos["aduanas"]),  "#FAEEDA","#854F0B", _th_adu, _ta_adu)
@@ -1348,46 +1350,46 @@ if menu == "📦 Importaciones":
 
             status_slide = (
                 '<div style="width:100vw;height:100vh;display:flex;flex-direction:column;'
-                'padding:14px 22px 12px;gap:10px;background:#f4fbf7;box-sizing:border-box;'
+                'padding:12px 20px 10px;gap:8px;background:#f4fbf7;box-sizing:border-box;'
                 'font-family:Arial,sans-serif;overflow:hidden;">'
 
-                # Header — ~20vh compacto con logos
+                # Header compacto — logos + título, sin duplicar
                 + '<div style="display:flex;align-items:center;justify-content:space-between;'
-                  'background:#fff;border-radius:14px;padding:0 24px;'
+                  'background:#fff;border-radius:14px;padding:0 22px;'
                   'border-bottom:4px solid #c8e06a;'
-                  'box-shadow:0 2px 12px rgba(26,122,74,0.1);'
-                  'flex:0 0 calc(20vh - 12px);">'
-                  + '<div>' + _img_c_st + '</div>'
+                  'box-shadow:0 2px 10px rgba(26,122,74,0.08);'
+                  'flex:0 0 calc(18vh - 10px);">'
+                  + '<div style="height:100%;display:flex;align-items:center;">' + _img_c_st + '</div>'
                   + '<div style="text-align:center;">'
-                    '<div style="font-size:clamp(1.1rem,2.5vh,2rem);font-weight:900;color:#1a7a4a;">'
+                    '<div style="font-size:clamp(1rem,2.2vh,1.7rem);font-weight:900;color:#1a7a4a;">'
                     '📊 Status Global Importaciones</div>'
-                    '<div style="font-size:clamp(10px,1.3vh,14px);color:#aaa;margin-top:3px;">'
+                    '<div style="font-size:clamp(9px,1.2vh,13px);color:#aaa;margin-top:2px;">'
                     'LA CARCASA MOVIL · Cargoflex Supply</div>'
                     '</div>'
-                  + '<div>' + _img_cf_st + '</div>'
+                  + '<div style="height:100%;display:flex;align-items:center;">' + _img_cf_st + '</div>'
                   + '</div>'
 
-                # KPIs — 2do tercio ~30vh
-                + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;'
-                  'flex:0 0 calc(30vh - 12px);">'
-                  '<div style="background:#fff;border-radius:14px;border-left:6px solid #2d9e6b;'
-                  'padding:clamp(12px,2vh,22px) 20px;display:flex;flex-direction:column;justify-content:space-between;">'
-                  '<div style="font-size:clamp(10px,1.4vh,15px);font-weight:800;text-transform:uppercase;'
+                # KPIs — compactos ~24vh
+                + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;'
+                  'flex:0 0 calc(24vh - 10px);">'
+                  '<div style="background:#fff;border-radius:12px;border-left:5px solid #2d9e6b;'
+                  'padding:clamp(8px,1.5vh,16px) 18px;display:flex;flex-direction:column;justify-content:space-between;">'
+                  '<div style="font-size:clamp(9px,1.2vh,13px);font-weight:800;text-transform:uppercase;'
                   'letter-spacing:.6px;color:#888;">Total Importaciones</div>'
-                  '<div style="font-size:clamp(32px,6vh,58px);font-weight:900;color:#1a7a4a;line-height:1;">'+str(total_i)+'</div>'
-                  '<div style="font-size:clamp(10px,1.2vh,13px);color:#bbb;">importaciones totales</div></div>'
-                  '<div style="background:#fff;border-radius:14px;border-left:6px solid #e8a020;'
-                  'padding:clamp(12px,2vh,22px) 20px;display:flex;flex-direction:column;justify-content:space-between;">'
-                  '<div style="font-size:clamp(10px,1.4vh,15px);font-weight:800;text-transform:uppercase;'
+                  '<div style="font-size:clamp(28px,5vh,50px);font-weight:900;color:#1a7a4a;line-height:1;">'+str(total_i)+'</div>'
+                  '<div style="font-size:clamp(9px,1.1vh,12px);color:#bbb;">importaciones totales</div></div>'
+                  '<div style="background:#fff;border-radius:12px;border-left:5px solid #e8a020;'
+                  'padding:clamp(8px,1.5vh,16px) 18px;display:flex;flex-direction:column;justify-content:space-between;">'
+                  '<div style="font-size:clamp(9px,1.2vh,13px);font-weight:800;text-transform:uppercase;'
                   'letter-spacing:.6px;color:#888;">Pendientes de Arribo</div>'
-                  '<div style="font-size:clamp(32px,6vh,58px);font-weight:900;color:#e8a020;line-height:1;">'+str(n_pend_i)+'</div>'
-                  '<div style="font-size:clamp(10px,1.2vh,13px);color:#bbb;">'+str(n_pend_asn_i)+' ASNs pendientes</div></div>'
-                  '<div style="background:#fff;border-radius:14px;border-left:6px solid #1D9E75;'
-                  'padding:clamp(12px,2vh,22px) 20px;display:flex;flex-direction:column;justify-content:space-between;">'
-                  '<div style="font-size:clamp(10px,1.4vh,15px);font-weight:800;text-transform:uppercase;'
+                  '<div style="font-size:clamp(28px,5vh,50px);font-weight:900;color:#e8a020;line-height:1;">'+str(n_pend_i)+'</div>'
+                  '<div style="font-size:clamp(9px,1.1vh,12px);color:#bbb;">'+str(n_pend_asn_i)+' ASNs pendientes</div></div>'
+                  '<div style="background:#fff;border-radius:12px;border-left:5px solid #1D9E75;'
+                  'padding:clamp(8px,1.5vh,16px) 18px;display:flex;flex-direction:column;justify-content:space-between;">'
+                  '<div style="font-size:clamp(9px,1.2vh,13px);font-weight:800;text-transform:uppercase;'
                   'letter-spacing:.6px;color:#888;">Arribados</div>'
-                  '<div style="font-size:clamp(32px,6vh,58px);font-weight:900;color:#1D9E75;line-height:1;">'+str(n_arr_i)+'</div>'
-                  '<div style="font-size:clamp(10px,1.2vh,13px);color:#bbb;">'+str(n_arr_asn_i)+' ASNs recibidos</div></div>'
+                  '<div style="font-size:clamp(28px,5vh,50px);font-weight:900;color:#1D9E75;line-height:1;">'+str(n_arr_i)+'</div>'
+                  '<div style="font-size:clamp(9px,1.1vh,12px);color:#bbb;">'+str(n_arr_asn_i)+' ASNs recibidos</div></div>'
                   '</div>'
 
                 # Pipeline — 3er tercio
