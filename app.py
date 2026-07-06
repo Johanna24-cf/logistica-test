@@ -17,8 +17,8 @@ st.set_page_config(page_title="Sistema Logístico Carcasas", page_icon="📦", l
 
 # 2. LOGO Y ESTILOS
 def cargar_estilos():
-    # NOTA: Asegúrate de que NO haya una 'f' antes de las comillas triples de abajo
-    st.markdown("""
+    # Usamos st.html en lugar de st.markdown para evitar fallos de tipos en Python 3.14
+    st.html("""
         <style>
         /* ── Paleta global verde → amarillo ── */
         :root {
@@ -33,7 +33,7 @@ def cargar_estilos():
 
         /* Sidebar */
         [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #1a7a4a 0%, #2d9e6b 60%, #c8e06a 100%);
+            background: linear-gradient(180deg, #1a7a4a 0%, #2d9e6b 60%, #c8e06a 100%) !important;
         }
         [data-testid="stSidebar"] * { color: white !important; font-weight: 500; }
         [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
@@ -94,7 +94,7 @@ def cargar_estilos():
             padding-bottom: 0.5rem;
         }
         </style>
-    """, unsafe_with_html=True)
+    """)
 
 cargar_estilos()
 
