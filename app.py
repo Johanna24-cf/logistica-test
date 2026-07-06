@@ -5,8 +5,7 @@
 import streamlit as st
 import pandas as pd
 import gspread
-# LIBRERÍA MODERNA DE GOOGLE AUTH (Soluciona 'No access token in response')
-from google.oauth2.service_account import Credentials
+from oauth2client.service_account import ServiceAccountCredentials
 from datetime import date, datetime
 import os
 import base64
@@ -18,8 +17,7 @@ st.set_page_config(page_title="Sistema Logístico Carcasas", page_icon="📦", l
 
 # 2. LOGO Y ESTILOS
 def cargar_estilos():
-    # Usamos st.html en lugar de st.markdown para evitar fallos de tipos en Python 3.14
-    st.html("""
+    st.markdown("""
         <style>
         /* ── Paleta global verde → amarillo ── */
         :root {
@@ -34,7 +32,7 @@ def cargar_estilos():
 
         /* Sidebar */
         [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #1a7a4a 0%, #2d9e6b 60%, #c8e06a 100%) !important;
+            background: linear-gradient(180deg, #1a7a4a 0%, #2d9e6b 60%, #c8e06a 100%);
         }
         [data-testid="stSidebar"] * { color: #ffffff !important; }
         [data-testid="stSidebar"] .stRadio label { color: #fff !important; }
@@ -149,7 +147,7 @@ def cargar_estilos():
             background: rgba(255,255,255,0.95) !important;
         }
         </style>
-        """)
+        """, unsafe_allow_html=True)
 
 
 def mostrar_logo_izquierdo():
@@ -189,13 +187,8 @@ st.markdown(f'''
 @st.cache_resource
 def conectar_google():
     try:
-        # Definimos los alcances (scopes) oficiales
-        scope = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive"
-        ]
-        # USAMOS LA LIBRERÍA MODERNA DE GOOGLE AUTH
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
         return gspread.authorize(creds)
     except Exception as e:
         st.error(f"Error de conexión: {e}"); return None
@@ -205,11 +198,12 @@ client = conectar_google()
 # ── ID Sheet Historial Carcasa ─────────────────────────────────────────────
 SHEET_ID_HIST_CARCASA = "1x0jVDMYk9htwttNcpXlXeaQcR0ELoBYeF4iP2qYcs1s"
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300)  # ← descomenta esta línea
 def cargar_historial_carcasa():
     import re, pandas as pd
     try:
         sh = client.open_by_key(SHEET_ID_HIST_CARCASA)
+        # quita los st.write de debug
         frames = []
         for ws in sh.worksheets():
             if re.match(r"HIST_\d{4}_\d{2}", ws.title):
@@ -234,7 +228,6 @@ def cargar_historial_carcasa():
     except Exception as e:
         st.error(f"Error cargando historial Carcasa: {type(e).__name__}: {str(e)}")
         return pd.DataFrame()
-
 def abrir_archivo_dinamico(nombre_o_id):
     if len(nombre_o_id) > 25:
         return client.open_by_key(nombre_o_id)
@@ -381,6 +374,12 @@ def _logos_b64():
     return _b64("CARCASAS.png"), _b64("CARGOFLEX.png")
 
 
+
+
+
+
+
+
 def mostrar_seccion_ppt(titulo_seccion, slides):
     import plotly.io as pio
     import streamlit.components.v1 as components
@@ -417,6 +416,8 @@ def mostrar_seccion_ppt(titulo_seccion, slides):
             slides_js = "[" + ",".join(parts) + "]"
 
             # Leer template y reemplazar
+            tmpl = open(__file__).read()
+            # El template está embebido como string en la función _ppt_template()
             html = _ppt_template()
             html = (html
                 .replace("__SLIDES_JS__", slides_js)
@@ -440,14 +441,66 @@ def _ppt_template():
 <style>
   * { box-sizing:border-box; margin:0; padding:0; }
   html, body { width:100%; height:100%; background:#f0faf4; font-family:Arial,sans-serif; overflow:hidden; }
-  #wrap { width:100%; height:100vh; display:flex; flex-direction:column; padding:6px 12px 6px; gap:5px; }
-  #hdr { display:none; }
-  .logo-w { width:190px; display:flex; align-items:center; }
-  .logo-w.r { justify-content:flex-end; }
-  #titulo { color:#1a7a4a; font-size:1.5rem; font-weight:800; text-align:center; flex:1; padding:0 10px; }
-  #pw { width:100%; height:4px; background:#c8e06a; border-radius:3px; flex-shrink:0; }
-  #pb { height:4px; background:#1a7a4a; border-radius:3px; width:0%; }
-  #body { flex:1; min-height:0; border:2px solid #2d9e6b; border-radius:12px; background:#fff; overflow:hidden; display:flex; align-items:stretch; }
+  #wrap{
+    width:100%;
+    height:100vh;
+    display:flex;
+    flex-direction:column;
+    padding:10px;
+    gap:10px;
+    background:#f0faf4;
+  }
+
+  #hdr{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    height:20%;
+    min-height:110px;
+    max-height:170px;
+    background:white;
+    border:2px solid #2d9e6b;
+    border-radius:12px;
+    padding:18px 24px;
+    flex-shrink:0;
+  }
+
+  .logo-w{
+    width:200px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .logo-w img{
+    max-height:80px;
+    max-width:180px;
+    object-fit:contain;
+  }
+
+  .logo-w.r{
+    justify-content:flex-end;
+  }
+
+  #titulo{
+    flex:1;
+    text-align:center;
+    color:#1a7a4a;
+    font-size:2rem;
+    font-weight:800;
+    padding:0 20px;
+  }
+
+  #body{
+    flex:1;
+    min-height:0;
+    border:2px solid #2d9e6b;
+    border-radius:12px;
+    background:#fff;
+    overflow:hidden;
+    display:flex;
+    align-items:stretch;
+  }
   #plt-div { width:100%; height:100%; }
   #html-div { width:100%; height:100%; overflow:hidden; display:none; }
   #footer { display:flex; align-items:center; justify-content:space-between; background:#fff; border-radius:10px; border:1.5px solid #c8e06a; padding:4px 14px; flex-shrink:0; }
@@ -527,11 +580,13 @@ function goTo(i) {
   } else {
     plt.style.display='none'; htm.style.display='block';
     htm.innerHTML=SLIDES[i].content;
+    // Renderizar divs con data-chart usando Plotly (ya cargado en este documento)
     setTimeout(function(){
       htm.querySelectorAll('[data-chart="bar"]').forEach(function(el){
         var data = JSON.parse(el.getAttribute('data-points') || '[]');
         var color = el.getAttribute('data-color') || '#1D9E75';
         if (!data.length) return;
+        // Usar dimensiones fijas si el elemento las define (data-w / data-h)
         var W = parseInt(el.getAttribute('data-w') || '0') || el.parentElement.clientWidth - 28 || 400;
         var H = parseInt(el.getAttribute('data-h') || '0') || 190;
         Plotly.newPlot(el, [{
@@ -597,7 +652,6 @@ document.addEventListener('keydown',function(e){
 </script>
 </body>
 </html>"""
-
 
 def _render_top10(df, n=10):
     st.markdown('<div class="titulo-seccion">🏆 Top SKUs despachados</div>', unsafe_allow_html=True)
@@ -724,14 +778,18 @@ def _render_heatmap(df):
     tabla["TOTAL"] = tabla.sum(axis=1)
     tabla = tabla.sort_values("TOTAL", ascending=False).drop(columns=["TOTAL"])
     fig = px.imshow(
-        tabla, color_continuous_scale=[[0.0, "#f0faf4"], [0.25, "#85dcaa"], [0.5, "#3dbb7e"], [0.75, "#c8e06a"], [1.0, "#e8a020"]],
+        tabla,
+        color_continuous_scale=[[0.0, "#f0faf4"], [0.25, "#85dcaa"], [0.5, "#3dbb7e"], [0.75, "#c8e06a"], [1.0, "#e8a020"]],
         aspect="auto", text_auto=True, labels=dict(color="Unidades"),
     )
     fig.update_traces(texttemplate="%{z:,}", textfont_size=11)
     fig.update_layout(
-        height=max(350, len(tabla) * 32 + 80), margin=dict(l=10, r=10, t=20, b=40),
-        coloraxis_showscale=False, xaxis=dict(side="top", tickfont=dict(size=11)),
-        yaxis=dict(tickfont=dict(size=11)), plot_bgcolor="white", paper_bgcolor="white",
+        height=max(350, len(tabla) * 32 + 80),
+        margin=dict(l=10, r=10, t=20, b=40),
+        coloraxis_showscale=False,
+        xaxis=dict(side="top", tickfont=dict(size=11)),
+        yaxis=dict(tickfont=dict(size=11)),
+        plot_bgcolor="white", paper_bgcolor="white",
         font=dict(family="Arial", size=11, color="#2d3436"),
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -750,173 +808,1232 @@ def render_dash_despachos():
     st.markdown('<div class="titulo-seccion">📊 Dashboard de Despachos</div>', unsafe_allow_html=True)
     _render_metricas_despachos(df)
     st.divider()
-    fig_top = _render_top10(df)
+    fig_top  = _render_top10(df)
     st.divider()
     fig_evol = _render_evolutivo(df)
     st.divider()
-    fig_hm = _render_heatmap(df)
+    fig_hm   = _render_heatmap(df)
     st.divider()
     mostrar_seccion_ppt("📊 Dashboard de Despachos", [
-        ("🏆 Top SKUs despachados", fig_top),
-        ("📈 Evolutivo mensual", fig_evol),
+        ("🏆 Top SKUs despachados",       fig_top),
+        ("📈 Evolutivo mensual",          fig_evol),
         ("🗺️ Mapa de calor tienda × mes", fig_hm),
     ])
 
 
 # =========================================================
-# 4. FUNCIONES DE PROCESAMIENTO Y MENÚ LATERAL (FINAL DEL SCRIPT)
+# 4. FUNCIONES DE PROCESAMIENTO
 # =========================================================
 
-# Inicializaciones de variables clave en session_state
-_KEY_PPT = "p_mode"
-_KEY_HTML = "p_html"
+def update_consolidado_arribo(doc, fecha, asns_sel=None):
+    """
+    Solo escribe en RECEPCION_IMPORTACIONES → MOVIMIENTOS.
+    No modifica el Consolidado - Carcasas.
+    asns_sel: lista de ASNs a confirmar, o ["TODAS"] / None para confirmar todos.
+    """
+    try:
+        sh_cons = abrir_archivo_dinamico("Consolidado - Carcasas")
+        wks_cons = sh_cons.sheet1
+        all_data = wks_cons.get_all_values()
+        headers = [h.upper() for h in all_data[0]]
 
-if _KEY_PPT not in st.session_state:
-    st.session_state[_KEY_PPT] = False
+        col_doc      = headers.index("NOMBRE CORREO")
+        col_recuento = headers.index("RECUENTO") if "RECUENTO" in headers else None
+        col_asn      = headers.index("ASN") if "ASN" in headers else None
 
-# Sidebar de Control
-with st.sidebar:
-    st.markdown("### ⚙️ Panel de Configuración")
-    # Toggle de modo presentación integral
-    modo_pres = st.toggle("🖥️ Modo Presentación Completo", value=st.session_state[_KEY_PPT], key="toggle_pres")
-    if modo_pres != st.session_state[_KEY_PPT]:
-        st.session_state[_KEY_PPT] = modo_pres
-        st.rerun()
+        filtrar_asn = (asns_sel and "TODAS" not in asns_sel)
 
-    st.markdown("---")
-    opcion_menu = st.radio("Secciones", ["📦 Historial Carcasas", "📊 Dashboard Despachos"])
+        filas_para_traspaso = []
 
-# Enrutamiento de Vistas principales
-if not st.session_state[_KEY_PPT]:
-    if opcion_menu == "📦 Historial Carcasas":
-        st.title("📦 Control de Historial Carcasas")
-        df_hist = cargar_historial_carcasa()
-        if not df_hist.empty:
-            st.dataframe(df_hist, use_container_width=True)
-        else:
-            st.info("No se encontraron registros en el historial.")
-    elif opcion_menu == "📊 Dashboard Despachos":
-        render_dash_despachos()
+        for i, row in enumerate(all_data[1:], start=2):
+            if row[col_doc] == str(doc):
+                if col_recuento is not None and str(row[col_recuento]).strip() not in ["1", "1.0"]:
+                    continue
+                if filtrar_asn and col_asn is not None:
+                    if str(row[col_asn]).strip() not in [str(a) for a in asns_sel]:
+                        continue
+                filas_para_traspaso.append(row)
 
-# 7. MODO PRESENTACIÓN INTEGRAL (INYECTADO CORREGIDO Y ALINEADO)
-else:
-    if _KEY_HTML not in st.session_state or True:
-        df_hist_cron = cargar_historial_carcasa()
-        if not df_hist_cron.empty and 'Fecha' in df_hist_cron.columns:
-            df_cron = df_hist_cron.sort_values('Fecha', ascending=True)
-            fechas_js = [x.strftime('%d/%m') for x in df_cron['Fecha']]
-            eri_js = [float(x) for x in df_cron['ERI %']] if 'ERI %' in df_cron.columns else []
-            eru_js = [float(x) for x in df_cron['ERU %']] if 'ERU %' in df_cron.columns else []
-        else:
-            fechas_js, eri_js, eru_js = [], [], []
-        
-        _html = f"""
-<!DOCTYPE html>
+        if filas_para_traspaso:
+            sh_rec  = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
+            wks_mov = sh_rec.worksheet("MOVIMIENTOS")
+
+            bulk_data = []
+            for row in filas_para_traspaso:
+                tienda = row[headers.index("TIENDA")].strip() if "TIENDA" in headers else ""
+                if tienda == "4298":
+                    dest, proc = "ALMACENAJE", "POR ALMACENAR"
+                else:
+                    dest = "TIENDA"
+                    es_ap = any("APERTURA" in str(row[headers.index(f"X{j}")]).upper()
+                                for j in range(1, 10) if f"X{j}" in headers)
+                    proc = "APERTURA" if es_ap else "POR DISTRIBUIR"
+
+                col_hora_fech_idx = headers.index("ETA") if "ETA" in headers else 0
+                bulk_data.append([
+                    row[headers.index("ID_DESPACHO")] if "ID_DESPACHO" in headers else row[0],
+                    row[col_doc],
+                    row[headers.index("ASN")] if "ASN" in headers else "",
+                    tienda,
+                    row[headers.index("CANTIDAD")] if "CANTIDAD" in headers else "",
+                    "Pendiente",
+                    str(fecha),
+                    row[col_hora_fech_idx],
+                    dest, proc, ""
+                ])
+            wks_mov.append_rows(bulk_data)
+            return True
+        return False
+    except Exception as e:
+        st.error(f"Error técnico: {e}")
+        return False
+
+
+# =========================================================
+# 5. UI Y RENDERIZADO
+# =========================================================
+
+df_import, df_recep, df_tiendas = cargar_datos_completos()
+
+st.title("📦 Gestión de Importaciones")
+menu = st.sidebar.radio("MENÚ PRINCIPAL", [
+    "📦 Importaciones",
+    "📊 Dash Despachos",
+    "📋 Indicadores de Almacén",
+])
+
+# ----------------------------------------------------------
+# MENÚ: IMPORTACIONES
+# ----------------------------------------------------------
+if menu == "📦 Importaciones":
+    tab_dash, tab_ops = st.tabs(["📊 Dash Importacion", "⚙️ Operaciones"])
+
+    with tab_dash:
+        st.subheader("🏪 Próximas Aperturas de Tiendas - Perú")
+        if not df_tiendas.empty:
+            columnas_tiendas_req = ["ESTADO", "FCH ESTIMADA", "TIENDA", "DESCRIPCION"]
+            if all(col in df_tiendas.columns for col in columnas_tiendas_req):
+                df_ap = df_tiendas[df_tiendas["ESTADO"].str.upper().str.contains("PENDIENTE", na=False)].copy()
+                df_ap["FCH_DT"] = pd.to_datetime(df_ap["FCH ESTIMADA"], dayfirst=True, errors='coerce')
+                df_filtrado = df_ap[df_ap["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
+                cols = st.columns(4)
+                for i, (_, row) in enumerate(df_filtrado.iterrows()):
+                    with cols[i % 4]:
+                        st.markdown(f'''<div class="apertura-card">
+                            <div class="tienda-titulo">🏪 {row["TIENDA"]}</div>
+                            <div class="desc-tienda">{row["DESCRIPCION"]}</div>
+                            <div class="fecha-est">📅 {row.get("FCH ESTIMADA","")}</div>
+                        </div>''', unsafe_allow_html=True)
+            else:
+                st.warning("⚠️ Columnas faltantes en 'TIENDAS CARCASAS'")
+
+        st.markdown('<div class="titulo-seccion">STATUS GLOBAL</div>', unsafe_allow_html=True)
+
+        df_pend = pd.DataFrame()
+        df_arr  = pd.DataFrame()
+
+        # Pares (importacion, ASN) ya en recepción — lógica por combinación, no solo por importación
+        pares_recibidos = set()
+        if not df_recep.empty and "IMPORTACION" in df_recep.columns and "ASN" in df_recep.columns:
+            pares_recibidos = set(
+                zip(
+                    df_recep["IMPORTACION"].astype(str).str.strip().str.lower(),
+                    df_recep["ASN"].astype(str).str.strip().str.lower()
+                )
+            )
+
+        if not df_import.empty and "NOMBRE CORREO" in df_import.columns:
+            # Filtrar Recuento = 1
+            col_rec = next((c for c in df_import.columns if c.upper() == "RECUENTO"), None)
+            df_base = df_import[df_import[col_rec].isin(["1", "1.0"])].copy() if col_rec else df_import.copy()
+
+            # Pendientes = ASNs del consolidado cuyo par (importacion, ASN) NO está en recepción
+            if "ASN" in df_base.columns and pares_recibidos:
+                par_key = list(zip(
+                    df_base["NOMBRE CORREO"].astype(str).str.strip().str.lower(),
+                    df_base["ASN"].astype(str).str.strip().str.lower()
+                ))
+                mask_pend = [p not in pares_recibidos for p in par_key]
+            else:
+                # Fallback: si no hay ASN en consolidado, filtrar por importación completa
+                importaciones_recibidas = set(r[0] for r in pares_recibidos)
+                mask_pend = ~df_base["NOMBRE CORREO"].astype(str).str.strip().str.lower().isin(importaciones_recibidas)
+            _pend_raw = df_base[mask_pend].copy()
+
+            if not _pend_raw.empty:
+                # Detectar columna ETA (buscar variantes de nombre)
+                col_eta = next((c for c in _pend_raw.columns if c.upper() in ("ETA", "FECHA ETA", "F. ETA", "FETA")), None)
+                # Groupby SIN ETA para no multiplicar filas
+                cols_grp = ["NOMBRE CORREO", "STATUS"]
+                if "ETA" in _pend_raw.columns:
+                    cols_grp.append("ETA")
+                agg_col = "ASN" if "ASN" in _pend_raw.columns else "NOMBRE CORREO"
+                rename_map = {
+                    agg_col: "ASNs",
+                    "NOMBRE CORREO": "Importación",
+                    "STATUS": "Estado",
+                    "ETA": "ETA",
+                }
+                df_pend = (
+                    _pend_raw.groupby(cols_grp)[agg_col].nunique()
+                    .reset_index()
+                    .rename(columns=rename_map)
+                )
+                # Agregar ETA como columna aparte (primer valor por importación)
+                if col_eta:
+                    _eta_map = (
+                        _pend_raw.groupby("NOMBRE CORREO")[col_eta]
+                        .first()
+                        .reset_index()
+                        .rename(columns={"NOMBRE CORREO": "Importación", col_eta: "ETA"})
+                    )
+                    df_pend = df_pend.merge(_eta_map, on="Importación", how="left")
+                orden_map = {"ADUANAS": 0, "EN TRÁNSITO": 1, "EN TRANSITO": 1, "ORIGEN": 2, "SUPPLY": 3}
+                df_pend["_ord"] = df_pend["Estado"].str.upper().str.strip().map(orden_map).fillna(4)
+                df_pend = df_pend.sort_values("_ord").drop(columns=["_ord"]).reset_index(drop=True)
+
+        # Arribados = de recepción, agrupados por importación + fecha llegada
+        if not df_recep.empty and "IMPORTACION" in df_recep.columns:
+            col_fch = "FCH LLEGADA" if "FCH LLEGADA" in df_recep.columns else None
+            cols_arr = ["IMPORTACION"] + ([col_fch] if col_fch else [])
+            agg_col2 = "ASN" if "ASN" in df_recep.columns else "IMPORTACION"
+            df_arr = (
+                df_recep.groupby(cols_arr)[agg_col2].nunique()
+                .reset_index()
+                .rename(columns={
+                    "IMPORTACION": "Importación",
+                    agg_col2: "ASNs",
+                    col_fch: "Fecha Llegada"
+                })
+            )
+            df_arr = df_arr[df_arr["Importación"].str.strip() != ""].reset_index(drop=True)
+            if "Fecha Llegada" in df_arr.columns:
+                df_arr["_fch"] = pd.to_datetime(df_arr["Fecha Llegada"], errors="coerce")
+                df_arr = df_arr.sort_values("_fch", ascending=False, na_position="last").drop(columns=["_fch"])
+            df_arr = df_arr.reset_index(drop=True)
+
+        # Métricas
+        total_docs = df_import["NOMBRE CORREO"].nunique() if not df_import.empty and "NOMBRE CORREO" in df_import.columns else 0
+        n_pend = df_pend["Importación"].nunique() if not df_pend.empty else 0
+        n_arr  = df_arr["Importación"].nunique()  if not df_arr.empty  else 0
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("📋 Total Importaciones", total_docs)
+        m2.metric("⏳ Pendientes de Arribo", n_pend)
+        m3.metric("✅ Arribados", n_arr)
+
+        st.divider()
+
+        # ── Función tabla HTML bonita ──────────────────────────────────────
+        def _render_tabla_html(df, tipo="pend"):
+            if df.empty:
+                return ""
+            STATUS_COLORS = {
+                "EN TRÁNSITO": ("#E6F1FB","#185FA5"),
+                "EN TRANSITO": ("#E6F1FB","#185FA5"),
+                "ORIGEN":      ("#FAEEDA","#854F0B"),
+                "SUPPLY":      ("#EEEDFE","#534AB7"),
+                "ADUANAS":     ("#FAEEDA","#BA7517"),
+            }
+            rows_html = ""
+            for i, row in df.iterrows():
+                bg = "#ffffff" if i % 2 == 0 else "#f9fefb"
+                cells = ""
+                for col_name, val in row.items():
+                    val_str = str(val) if str(val) not in ("nan","None","") else "—"
+                    if col_name == "Estado" and val_str.upper() in STATUS_COLORS:
+                        pill_bg, pill_fg = STATUS_COLORS[val_str.upper()]
+                        cells += (f'<td style="padding:9px 14px;border-bottom:1px solid #f0faf4;">'
+                                  f'<span style="background:{pill_bg};color:{pill_fg};padding:3px 10px;'
+                                  f'border-radius:20px;font-size:11.5px;font-weight:600;">{val_str}</span></td>')
+                    elif col_name == "ASNs":
+                        cells += (f'<td style="padding:9px 14px;border-bottom:1px solid #f0faf4;'
+                                  f'text-align:right;font-weight:700;color:#1a7a4a;font-size:13px;">{val_str}</td>')
+                    elif col_name in ("ETA","Fecha ETD","Fecha Llegada"):
+                        cells += (f'<td style="padding:9px 14px;border-bottom:1px solid #f0faf4;'
+                                  f'color:#e8a020;font-weight:600;font-size:12.5px;">'
+                                  f'<span style="display:inline-flex;align-items:center;gap:4px;">📅 {val_str}</span></td>')
+                    else:
+                        cells += (f'<td style="padding:9px 14px;border-bottom:1px solid #f0faf4;'
+                                  f'color:#2d3436;font-size:12.5px;">{val_str}</td>')
+                rows_html += f'<tr style="background:{bg};">{cells}</tr>'
+
+            heads = "".join(
+                f'<th style="padding:10px 14px;background:#1a7a4a;color:#fff;font-size:11.5px;'
+                f'font-weight:700;text-align:left;letter-spacing:0.5px;">{c}</th>'
+                for c in df.columns
+            )
+            return (
+                '<div style="overflow-x:auto;border-radius:10px;border:1px solid #e0f2e9;">'
+                '<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">'
+                f'<thead><tr>{heads}</tr></thead>'
+                f'<tbody>{rows_html}</tbody>'
+                '</table></div>'
+            )
+
+        # ── PIPELINE KANBAN ────────────────────────────────────────────────
+        n_pend_asn = int(df_pend["ASNs"].sum()) if not df_pend.empty and "ASNs" in df_pend.columns else 0
+        n_arr_asn  = int(df_arr["ASNs"].sum())  if not df_arr.empty  and "ASNs" in df_arr.columns  else 0
+
+        STATUS_COLORS_PIPE = {
+            "EN TRÁNSITO": ("#378ADD", "#E6F1FB", "#185FA5"),
+            "EN TRANSITO": ("#378ADD", "#E6F1FB", "#185FA5"),
+            "ADUANAS":     ("#EF9F27", "#FAEEDA", "#854F0B"),
+            "ORIGEN":      ("#888780", "#F1EFE8", "#444441"),
+            "SUPPLY":      ("#2d9e6b", "#EAF3DE", "#0F6E56"),
+        }
+
+        def _ticket_html(row, tipo="pend"):
+            ap  = str(row.get("Importación","—"))
+            asn = str(int(row["ASNs"])) if "ASNs" in row and str(row["ASNs"]) not in ("nan","") else "—"
+            est = str(row.get("Estado","")).strip().upper()
+            col_line, col_bg, col_txt = STATUS_COLORS_PIPE.get(est, ("#cccccc","#f5f5f5","#555555"))
+            canal = str(row.get("Canal","")).strip().upper() if "Canal" in row else ""
+            canal_badge = ""
+            if canal in ("ROJO","VERDE"):
+                cb, ct = ("#fff3e0","#854F0B") if canal=="ROJO" else ("#eaf3de","#3B6D11")
+                canal_badge = f'<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:{cb};color:{ct};">{canal}</span>'
+            fecha = ""
+            for fk in ("ETA","Fecha Llegada","Fecha ETD"):
+                if fk in row and str(row[fk]) not in ("nan","None","—",""):
+                    fecha = f'<span style="font-size:11px;color:#aaa;">{str(row[fk])}</span>'
+                    break
+            border = f'border-left:3px solid {col_line};border-radius:0 8px 8px 0;' if tipo=="pend" else "border-radius:8px;"
+            return (
+                f'<div style="background:#fff;{border}border:0.5px solid #e0ede6;'
+                f'padding:10px 12px;margin-bottom:6px;display:flex;flex-direction:column;gap:6px;">'
+                f'<div style="display:flex;align-items:center;justify-content:space-between;">'
+                f'<span style="font-size:13px;font-weight:500;color:#1a1a1a;">{ap}</span>{canal_badge}</div>'
+                f'<div style="height:0.5px;background:#f0f0f0;"></div>'
+                f'<div style="display:flex;align-items:center;justify-content:space-between;">'
+                f'<span style="font-size:11px;color:#888;">📦 {asn} ASNs</span>{fecha}</div>'
+                f'</div>'
+            )
+
+        def _col_pipe(titulo, color_dot, n_badge, bg_badge, txt_badge, tickets_html, total_asn, scrollable=False):
+            scroll_style = "max-height:400px;overflow-y:auto;" if scrollable else ""
+            return (
+                f'<div style="background:#f7faf8;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px;">'
+                f'<div style="display:flex;align-items:center;justify-content:space-between;'
+                f'padding-bottom:8px;border-bottom:0.5px solid #e0ede6;margin-bottom:2px;">'
+                f'<div style="display:flex;align-items:center;gap:6px;">'
+                f'<span style="width:8px;height:8px;border-radius:50%;background:{color_dot};display:inline-block;"></span>'
+                f'<span style="font-size:12px;font-weight:500;color:#555;">{titulo}</span></div>'
+                f'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:{bg_badge};color:{txt_badge};font-weight:500;">{n_badge}</span>'
+                f'</div>'
+                f'<div style="{scroll_style}">{tickets_html}</div>'
+                f'<div style="font-size:11px;color:#aaa;text-align:right;padding-top:4px;'
+                f'border-top:0.5px solid #e8ede9;margin-top:2px;">{total_asn} ASNs total</div>'
+                f'</div>'
+            )
+
+        # Agrupar pendientes por estado
+        grupos = {"sin_estado": [], "transito": [], "aduanas": [], "supply": []}
+        if not df_pend.empty:
+            for _, row in df_pend.iterrows():
+                est = str(row.get("Estado","")).strip().upper()
+                if est in ("EN TRÁNSITO","EN TRANSITO"):
+                    grupos["transito"].append(row)
+                elif est == "ADUANAS":
+                    grupos["aduanas"].append(row)
+                elif est == "SUPPLY":
+                    grupos["supply"].append(row)
+                else:
+                    grupos["sin_estado"].append(row)
+
+        # Agregar arribados a supply
+        if not df_arr.empty:
+            for _, row in df_arr.iterrows():
+                r = row.copy()
+                r["Estado"] = "SUPPLY"
+                grupos["supply"].append(r)
+
+        def _tickets_and_asn(rows, tipo="pend"):
+            html = "".join(_ticket_html(r, tipo) for r in rows)
+            total = sum(int(r["ASNs"]) if "ASNs" in r and str(r.get("ASNs","")) not in ("nan","") else 0 for r in rows)
+            return html, total
+
+        t_sin, asn_sin    = _tickets_and_asn(grupos["sin_estado"])
+        t_tra, asn_tra    = _tickets_and_asn(grupos["transito"])
+        t_adu, asn_adu    = _tickets_and_asn(grupos["aduanas"])
+        t_sup, asn_sup    = _tickets_and_asn(grupos["supply"], "arr")
+
+        pipeline_html = (
+            '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:10px;">'
+            + _col_pipe("Sin estado",   "#888780", len(grupos["sin_estado"]),  "#F1EFE8","#444441", t_sin, asn_sin)
+            + _col_pipe("En tránsito",  "#378ADD", len(grupos["transito"]),    "#E6F1FB","#185FA5", t_tra, asn_tra)
+            + _col_pipe("Aduanas",      "#EF9F27", len(grupos["aduanas"]),     "#FAEEDA","#854F0B", t_adu, asn_adu)
+            + _col_pipe("Supply",       "#2d9e6b", len(grupos["supply"]),      "#EAF3DE","#0F6E56", t_sup, asn_sup, scrollable=True)
+            + '</div>'
+        )
+        st.markdown(pipeline_html, unsafe_allow_html=True)
+
+        # ── Botón presentación importaciones ───────────────────────────────
+        st.divider()
+
+        # Slide 1: tarjetas aperturas
+        # ══════════════════════════════════════════════════════
+        # SLIDE 1: Próximas Aperturas — cards 2x2
+        # ══════════════════════════════════════════════════════
+        def _card_ap(tienda, desc, fecha):
+            return (
+                '<div style="background:#fff;border-radius:12px;border-left:5px solid #2d9e6b;'
+                'padding:clamp(10px,1.8vh,20px) clamp(14px,2vw,24px);'
+                'box-shadow:0 2px 10px rgba(45,158,107,0.10);'
+                'display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;">'
+                '<div>'
+                '<div style="color:#1a7a4a;font-size:clamp(1rem,2.5vh,1.6rem);font-weight:800;margin-bottom:6px;">🏪 ' + tienda + '</div>'
+                '<div style="color:#636e72;font-size:clamp(0.8rem,1.5vh,1rem);line-height:1.4;">' + desc + '</div>'
+                '</div>'
+                '<div style="color:#e8a020;font-weight:700;font-size:clamp(0.85rem,1.6vh,1.05rem);'
+                'margin-top:10px;padding-top:10px;border-top:1.5px solid #f0faf4;">📅 ' + fecha + '</div>'
+                '</div>'
+            )
+
+        apertura_slide = ""
+        if not df_tiendas.empty and all(c in df_tiendas.columns for c in ["ESTADO","FCH ESTIMADA","TIENDA","DESCRIPCION"]):
+            df_ap2 = df_tiendas[df_tiendas["ESTADO"].str.upper().str.contains("PENDIENTE", na=False)].copy()
+            df_ap2["FCH_DT"] = pd.to_datetime(df_ap2["FCH ESTIMADA"], dayfirst=True, errors="coerce")
+            df_ap2 = df_ap2[df_ap2["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
+            cards = "".join(_card_ap(str(r["TIENDA"]), str(r["DESCRIPCION"]), str(r.get("FCH ESTIMADA",""))) for _, r in df_ap2.iterrows())
+            # Logos b64
+            _lc_ap  = _b64_img("CARCASAS.png")
+            _lcf_ap = _b64_img("CARGOFLEX.png")
+            _img_c_ap  = f'<img src="data:image/png;base64,{_lc_ap}"  style="height:100%;max-height:70px;object-fit:contain;">' if _lc_ap  else ""
+            _img_cf_ap = f'<img src="data:image/png;base64,{_lcf_ap}" style="height:100%;max-height:70px;object-fit:contain;">' if _lcf_ap else ""
+
+            apertura_slide = (
+                # Sin header interno — el wrapper de Streamlit ya tiene logos y título
+                '<div style="width:100%;height:100%;display:grid;'
+                'grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;'
+                'gap:12px;padding:14px;background:#f4fbf7;box-sizing:border-box;">'
+                + cards
+                + '</div>'
+            )
+
+        # ══════════════════════════════════════════════════════
+        # SLIDE 2: Dashboard completo — métricas + gráficos + tablas
+        # Replica exactamente la vista del dashboard en Streamlit
+        # ══════════════════════════════════════════════════════
+        status_slide = ""
+        graficos_slide = None
+        try:
+            import json as _json_g, html as _html_esc
+
+            # ── Datos de métricas ──
+            total_i = df_import["NOMBRE CORREO"].nunique() if not df_import.empty else 0
+            n_pend_i = len(df_pend) if not df_pend.empty else 0
+            n_arr_i  = len(df_arr)  if not df_arr.empty  else 0
+            n_pend_asn_i = int(df_pend["ASNs"].sum()) if not df_pend.empty and "ASNs" in df_pend.columns else 0
+            n_arr_asn_i  = int(df_arr["ASNs"].sum())  if not df_arr.empty  and "ASNs" in df_arr.columns  else 0
+
+            # ── Datos para gráfico 1: por fecha ──
+            _datos_fecha = []
+            if not df_arr.empty and "Fecha Llegada" in df_arr.columns:
+                _df_fch = df_arr.copy()
+                _df_fch["_f"] = pd.to_datetime(_df_fch["Fecha Llegada"], errors="coerce")
+                _df_fch = _df_fch.dropna(subset=["_f"]).sort_values("_f")
+                for _, row in _df_fch.iterrows():
+                    _datos_fecha.append({"x": str(row["Fecha Llegada"]), "y": int(row["ASNs"])})
+
+            # ── Datos para gráfico 2: por importación ──
+            _datos_imp = []
+            if not df_arr.empty:
+                for _, row in df_arr.iterrows():
+                    _datos_imp.append({"x": str(row["Importación"]), "y": int(row["ASNs"])})
+
+            _FECHA_ATTR = _html_esc.escape(_json_g.dumps(_datos_fecha), quote=True)
+            _IMP_ATTR   = _html_esc.escape(_json_g.dumps(_datos_imp),   quote=True)
+
+            # ── Tablas HTML (reutiliza _tbl del bloque anterior si existe, sino define inline) ──
+            _SP = {
+                "EN TRÁNSITO": ("#E6F1FB","#185FA5"), "EN TRANSITO": ("#E6F1FB","#185FA5"),
+                "ORIGEN": ("#FAEEDA","#854F0B"), "SUPPLY": ("#EEEDFE","#534AB7"),
+                "ADUANAS": ("#FAEEDA","#BA7517"),
+            }
+            def _tbl2(df, mx=15):
+                df = df.head(mx)
+                heads = "".join(
+                    '<th style="padding:7px 12px;background:#1a7a4a;color:#fff;font-size:11px;'
+                    'font-weight:700;text-align:left;position:sticky;top:0;z-index:1;font-size:15px;">' + str(c) + '</th>'
+                    for c in df.columns
+                )
+                rows_html = ""
+                for i, r in enumerate(df.values):
+                    bg = "#ffffff" if i % 2 == 0 else "#f9fefb"
+                    cells = ""
+                    for ci, v in enumerate(r):
+                        cn = df.columns[ci]
+                        vs = str(v) if str(v) not in ("nan","None","") else "—"
+                        if cn == "Estado" and vs.upper() in _SP:
+                            pb,pf = _SP[vs.upper()]
+                            cells += ('<td style="padding:6px 12px;border-bottom:1px solid #f0faf4;">'
+                                      '<span style="background:'+pb+';color:'+pf+';padding:2px 8px;'
+                                      'border-radius:20px;font-size:12px;font-weight:600;">'+vs+'</span></td>')
+                        elif cn == "ASNs":
+                            cells += ('<td style="padding:6px 12px;border-bottom:1px solid #f0faf4;'
+                                      'text-align:right;font-weight:700;color:#1a7a4a;font-size:16px;">'+vs+'</td>')
+                        elif cn in ("ETA","Fecha ETD","Fecha Llegada","FCH LLEGADA","HORA FECH"):
+                            cells += ('<td style="padding:6px 12px;border-bottom:1px solid #f0faf4;'
+                                      'color:#e8a020;font-weight:600;font-size:15px;">📅 '+vs+'</td>')
+                        else:
+                            cells += ('<td style="padding:6px 12px;border-bottom:1px solid #f0faf4;'
+                                      'color:#2d3436;font-size:15px;">'+vs+'</td>')
+                    rows_html += '<tr style="background:'+bg+';">'+cells+'</tr>'
+                return ('<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">'
+                        '<thead><tr>'+heads+'</tr></thead>'
+                        '<tbody>'+rows_html+'</tbody></table>')
+
+            _tbl_pend = _tbl2(df_pend) if not df_pend.empty else '<p style="color:#888;font-size:12px;padding:10px;">Sin pendientes</p>'
+            _tbl_arr  = _tbl2(df_arr)  if not df_arr.empty  else '<p style="color:#888;font-size:12px;padding:10px;">Sin datos</p>'
+
+            # Tabla de arribados: solo 6 filas visibles, el resto con scroll
+            _tbl_arr_scroll = _tbl2(df_arr.head(6), mx=6) if not df_arr.empty else '<p style="color:#888;font-size:12px;padding:10px;">Sin datos</p>'
+
+            # Build pipeline HTML for PPT
+            def _ppt_ticket(row, tipo="pend"):
+                ap  = str(row.get("Importación","—"))
+                asn = str(int(row["ASNs"])) if "ASNs" in row and str(row.get("ASNs","")) not in ("nan","") else "—"
+                est = str(row.get("Estado","")).strip().upper()
+                SPPT = {
+                    "EN TRÁNSITO": "#378ADD","EN TRANSITO": "#378ADD",
+                    "ADUANAS":"#EF9F27","ORIGEN":"#888780","SUPPLY":"#2d9e6b"
+                }
+                col_line = SPPT.get(est,"#ccc")
+                canal = str(row.get("Canal","")).strip().upper() if "Canal" in row else ""
+                canal_b = ""
+                if canal in ("ROJO","VERDE"):
+                    cb,ct = ("#fff3e0","#854F0B") if canal=="ROJO" else ("#eaf3de","#3B6D11")
+                    canal_b = f'<span style="font-size:clamp(9px,1vh,11px);font-weight:600;padding:1px 5px;border-radius:4px;background:{cb};color:{ct};">{canal}</span>'
+                fecha = ""
+                for fk in ("ETA","Fecha Llegada","Fecha ETD"):
+                    if fk in row and str(row.get(fk,"")) not in ("nan","None","—",""):
+                        fecha = f'<span style="font-size:clamp(9px,1vh,11px);color:#aaa;">{str(row[fk])}</span>'
+                        break
+                bl = f'border-left:3px solid {col_line};border-radius:0 8px 8px 0;' if tipo=="pend" else "border-radius:8px;"
+                return (
+                    f'<div style="background:#fff;{bl}border:0.5px solid #ddeae0;'
+                    f'padding:7px 10px;margin-bottom:5px;flex-shrink:0;">'
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;">'
+                    f'<span style="font-size:clamp(11px,1.3vh,14px);font-weight:600;color:#1a1a1a;">{ap}</span>{canal_b}</div>'
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:3px;">'
+                    f'<span style="font-size:clamp(10px,1.1vh,12px);color:#888;">📦 {asn} ASNs</span>{fecha}</div>'
+                    f'</div>'
+                )
+
+            def _ppt_col(titulo, dot_color, n, bg_b, txt_b, tickets, total_asn, scroll=False):
+                # Todas las columnas tienen altura uniforme — fill del flex container
+                # Solo supply tiene scroll interno
+                sc = "flex:1;min-height:0;overflow-y:auto;" if scroll else "flex:1;min-height:0;overflow-y:hidden;"
+                return (
+                    f'<div style="background:#f0f7f2;border-radius:12px;padding:10px 10px 8px;'
+                    f'display:flex;flex-direction:column;gap:6px;min-height:0;">'
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;'
+                    f'padding-bottom:7px;border-bottom:0.5px solid #d8eae0;flex-shrink:0;">'
+                    f'<div style="display:flex;align-items:center;gap:6px;">'
+                    f'<span style="width:9px;height:9px;border-radius:50%;background:{dot_color};display:inline-block;"></span>'
+                    f'<span style="font-size:clamp(11px,1.4vh,15px);font-weight:700;color:#333;">{titulo}</span></div>'
+                    f'<span style="font-size:clamp(10px,1.2vh,13px);padding:2px 9px;border-radius:99px;background:{bg_b};color:{txt_b};font-weight:600;">{n}</span>'
+                    f'</div>'
+                    f'<div style="{sc}">{tickets}</div>'
+                    f'<div style="font-size:clamp(10px,1.1vh,12px);color:#aaa;text-align:right;padding-top:4px;'
+                    f'border-top:0.5px solid #d8eae0;flex-shrink:0;">{total_asn} ASNs total</div>'
+                    f'</div>'
+                )
+
+            _ppt_grupos = {"sin": [], "transito": [], "aduanas": [], "supply": []}
+            if not df_pend.empty:
+                for _, row in df_pend.iterrows():
+                    est2 = str(row.get("Estado","")).strip().upper()
+                    if est2 in ("EN TRÁNSITO","EN TRANSITO"): _ppt_grupos["transito"].append(row)
+                    elif est2 == "ADUANAS": _ppt_grupos["aduanas"].append(row)
+                    elif est2 == "SUPPLY": _ppt_grupos["supply"].append(row)
+                    else: _ppt_grupos["sin"].append(row)
+            if not df_arr.empty:
+                for _, row in df_arr.iterrows():
+                    r2 = row.copy(); r2["Estado"] = "SUPPLY"
+                    _ppt_grupos["supply"].append(r2)
+
+            def _mk(rows, tipo="pend"):
+                h = "".join(_ppt_ticket(r, tipo) for r in rows)
+                t = sum(int(r["ASNs"]) if "ASNs" in r and str(r.get("ASNs","")) not in ("nan","") else 0 for r in rows)
+                return h, t
+
+            _th_sin, _ta_sin = _mk(_ppt_grupos["sin"])
+            _th_tra, _ta_tra = _mk(_ppt_grupos["transito"])
+            _th_adu, _ta_adu = _mk(_ppt_grupos["aduanas"])
+            _th_sup, _ta_sup = _mk(_ppt_grupos["supply"], "arr")
+
+            _pipeline_ppt = (
+                '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));'
+                'gap:10px;flex:1;min-height:0;align-items:stretch;">'
+                + _ppt_col("Sin estado",  "#888780", len(_ppt_grupos["sin"]),      "#F1EFE8","#444441", _th_sin, _ta_sin)
+                + _ppt_col("En tránsito", "#378ADD", len(_ppt_grupos["transito"]), "#E6F1FB","#185FA5", _th_tra, _ta_tra)
+                + _ppt_col("Aduanas",     "#EF9F27", len(_ppt_grupos["aduanas"]),  "#FAEEDA","#854F0B", _th_adu, _ta_adu)
+                + _ppt_col("Supply",      "#2d9e6b", len(_ppt_grupos["supply"]),   "#EAF3DE","#0F6E56", _th_sup, _ta_sup, scroll=True)
+                + '</div>'
+            )
+
+            # Logos b64
+            _lc_st  = _b64_img("CARCASAS.png")
+            _lcf_st = _b64_img("CARGOFLEX.png")
+            _img_c_st  = f'<img src="data:image/png;base64,{_lc_st}"  style="height:100%;max-height:70px;object-fit:contain;">' if _lc_st  else ""
+            _img_cf_st = f'<img src="data:image/png;base64,{_lcf_st}" style="height:100%;max-height:70px;object-fit:contain;">' if _lcf_st else ""
+
+            status_slide = (
+                # Sin header interno — el wrapper de Streamlit ya tiene logos y título
+                '<div style="width:100%;height:100%;display:flex;flex-direction:column;'
+                'padding:12px 16px 10px;gap:8px;background:#f4fbf7;box-sizing:border-box;'
+                'font-family:Arial,sans-serif;overflow:hidden;">'
+
+                # KPIs — compactos ~24vh
+                + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;'
+                  'flex:0 0 calc(24vh - 10px);">'
+                  '<div style="background:#fff;border-radius:12px;border-left:5px solid #2d9e6b;'
+                  'padding:clamp(8px,1.5vh,16px) 18px;display:flex;flex-direction:column;justify-content:space-between;">'
+                  '<div style="font-size:clamp(9px,1.2vh,13px);font-weight:800;text-transform:uppercase;'
+                  'letter-spacing:.6px;color:#888;">Total Importaciones</div>'
+                  '<div style="font-size:clamp(28px,5vh,50px);font-weight:900;color:#1a7a4a;line-height:1;">'+str(total_i)+'</div>'
+                  '<div style="font-size:clamp(9px,1.1vh,12px);color:#bbb;">importaciones totales</div></div>'
+                  '<div style="background:#fff;border-radius:12px;border-left:5px solid #e8a020;'
+                  'padding:clamp(8px,1.5vh,16px) 18px;display:flex;flex-direction:column;justify-content:space-between;">'
+                  '<div style="font-size:clamp(9px,1.2vh,13px);font-weight:800;text-transform:uppercase;'
+                  'letter-spacing:.6px;color:#888;">Pendientes de Arribo</div>'
+                  '<div style="font-size:clamp(28px,5vh,50px);font-weight:900;color:#e8a020;line-height:1;">'+str(n_pend_i)+'</div>'
+                  '<div style="font-size:clamp(9px,1.1vh,12px);color:#bbb;">'+str(n_pend_asn_i)+' ASNs pendientes</div></div>'
+                  '<div style="background:#fff;border-radius:12px;border-left:5px solid #1D9E75;'
+                  'padding:clamp(8px,1.5vh,16px) 18px;display:flex;flex-direction:column;justify-content:space-between;">'
+                  '<div style="font-size:clamp(9px,1.2vh,13px);font-weight:800;text-transform:uppercase;'
+                  'letter-spacing:.6px;color:#888;">Arribados</div>'
+                  '<div style="font-size:clamp(28px,5vh,50px);font-weight:900;color:#1D9E75;line-height:1;">'+str(n_arr_i)+'</div>'
+                  '<div style="font-size:clamp(9px,1.1vh,12px);color:#bbb;">'+str(n_arr_asn_i)+' ASNs recibidos</div></div>'
+                  '</div>'
+
+                # Pipeline — 3er tercio
+                + _pipeline_ppt
+
+                + '</div>'
+            )
+
+        except Exception as _eg_s:
+            status_slide = ""
+
+        slides_imp = []
+        if apertura_slide:
+            slides_imp.append(("🏪 Próximas Aperturas", apertura_slide))
+        if status_slide:
+            slides_imp.append(("📊 Status Global Importaciones", status_slide))
+
+        if slides_imp:
+            mostrar_seccion_ppt("📦 Importaciones", slides_imp)
+
+    # tab_recep oculto (modo pantalla)
+
+    with tab_ops:
+        st.markdown('<div class="titulo-seccion">⚙️ Operaciones</div>', unsafe_allow_html=True)
+
+        col_arr, col_stk = st.columns(2)
+
+        # ── CONFIRMAR ARRIBO ──────────────────────────────────────────────
+        with col_arr:
+            st.markdown("""
+            <div style="background:#fff;border-radius:14px;border-top:5px solid #2d9e6b;
+                        padding:20px 22px;box-shadow:0 2px 10px rgba(45,158,107,0.1);">
+                <div style="color:#1a7a4a;font-size:1.1rem;font-weight:700;margin-bottom:4px;">
+                    🚢 Confirmar Arribo de Importación
+                </div>
+                <div style="color:#636e72;font-size:0.85em;">
+                    Solo aparecen las importaciones pendientes (sin registro en Recepción aún).
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown("")
+
+            # Importaciones pendientes = en consolidado y NO en recepción
+            imp_en_rec = set()
+            if not df_recep.empty and "IMPORTACION" in df_recep.columns:
+                imp_en_rec = set(df_recep["IMPORTACION"].astype(str).str.strip().str.lower())
+
+            docs_pendientes = []
+            if not df_import.empty and "NOMBRE CORREO" in df_import.columns:
+                col_rec3 = next((c for c in df_import.columns if c.upper() == "RECUENTO"), None)
+                df_base3 = df_import[df_import[col_rec3].isin(["1","1.0"])].copy() if col_rec3 else df_import.copy()
+                docs_pendientes = sorted(set(
+                    df_base3[~df_base3["NOMBRE CORREO"].astype(str).str.strip().str.lower().isin(imp_en_rec)]
+                    ["NOMBRE CORREO"].astype(str).str.strip().tolist()
+                ))
+
+            if not docs_pendientes:
+                st.success("✅ No hay importaciones pendientes de arribo.")
+            else:
+                with st.form("form_arribo", clear_on_submit=True):
+                    doc_sel = st.selectbox(f"📋 Importación ({len(docs_pendientes)} pendientes)", docs_pendientes)
+
+                    asns_doc = []
+                    if doc_sel and "ASN" in df_import.columns and col_rec3:
+                        asns_doc = sorted(
+                            df_base3[df_base3["NOMBRE CORREO"].astype(str).str.strip() == doc_sel]
+                            ["ASN"].astype(str).str.strip().tolist()
+                        )
+
+                    asns_sel = st.multiselect(
+                        f"📦 ASNs ({len(asns_doc)} disponibles)",
+                        options=["TODAS"] + asns_doc,
+                        default=["TODAS"]
+                    )
+                    fecha_arr = st.date_input("📅 Fecha de llegada", date.today())
+
+                    if st.form_submit_button("✅ Registrar Arribo", use_container_width=True):
+                        if update_consolidado_arribo(doc_sel, fecha_arr, asns_sel):
+                            st.toast(f"¡Arribo de {doc_sel} registrado!", icon="✅")
+                            st.cache_data.clear()
+                            st.rerun()
+
+        # ── CONFIRMAR ALMACENAMIENTO ──────────────────────────────────────
+        with col_stk:
+            st.markdown("""
+            <div style="background:#fff;border-radius:14px;border-top:5px solid #3dbb7e;
+                        padding:20px 22px;box-shadow:0 2px 10px rgba(45,158,107,0.1);">
+                <div style="color:#1a7a4a;font-size:1.1rem;font-weight:700;margin-bottom:4px;">
+                    🏢 Confirmar Ingreso a Stock
+                </div>
+                <div style="color:#636e72;font-size:0.85em;">
+                    ASNs en Recepción con STATUS_REC=Pendiente y TIENDA=4298.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown("")
+
+            # Recepción pendiente de almacenamiento: STATUS_REC=Pendiente y TIENDA=4298
+            df_recep_stk = pd.DataFrame()
+            if not df_recep.empty and "STATUS_REC" in df_recep.columns and "ASN" in df_recep.columns:
+                mask_stk = df_recep["STATUS_REC"].astype(str).str.strip().str.upper() == "PENDIENTE"
+                if "TIENDA" in df_recep.columns:
+                    mask_stk = mask_stk & (df_recep["TIENDA"].astype(str).str.strip() == "4298")
+                df_recep_stk = df_recep[mask_stk].copy()
+
+            # Importaciones disponibles (las que tienen ASNs pendientes de stock)
+            imps_stk = []
+            if not df_recep_stk.empty and "IMPORTACION" in df_recep_stk.columns:
+                imps_stk = sorted(df_recep_stk["IMPORTACION"].astype(str).str.strip().unique().tolist())
+
+            if df_recep_stk.empty or not imps_stk:
+                st.success("✅ No hay ASNs pendientes de almacenamiento.")
+            else:
+                # Selector de importación fuera del form para filtrar ASNs dinámicamente
+                imp_stk_sel = st.selectbox(
+                    f"📋 Importación ({len(imps_stk)} disponibles)",
+                    imps_stk,
+                    key="sel_imp_stk"
+                )
+
+                # Filtrar ASNs según importación seleccionada
+                asns_almacen = []
+                if imp_stk_sel:
+                    asns_almacen = sorted(
+                        df_recep_stk[
+                            df_recep_stk["IMPORTACION"].astype(str).str.strip() == imp_stk_sel
+                        ]["ASN"].astype(str).str.strip().tolist()
+                    )
+
+                with st.form("form_stock", clear_on_submit=True):
+                    asns_stk = st.multiselect(
+                        f"📦 ASNs ({len(asns_almacen)} disponibles)",
+                        options=["TODAS"] + asns_almacen,
+                        default=["TODAS"]
+                    )
+                    fecha_stk = st.date_input("📅 Fecha de ingreso", date.today())
+
+                    if st.form_submit_button("🏢 Confirmar Ingreso a Stock", use_container_width=True):
+                        try:
+                            sh_r  = abrir_archivo_dinamico("RECEPCION_IMPORTACIONES")
+                            w_m   = sh_r.worksheet("MOVIMIENTOS")
+                            lista = asns_almacen if "TODAS" in asns_stk else [a for a in asns_stk if a != "TODAS"]
+                            errores = []
+                            for asn in lista:
+                                try:
+                                    cell = w_m.find(str(asn))
+                                    w_m.update_cell(cell.row, 6, "ALMACENADO")
+                                    w_m.update_cell(cell.row, 7, str(fecha_stk))
+                                except Exception:
+                                    errores.append(asn)
+                            if errores:
+                                st.warning(f"No se encontraron: {errores}")
+                            else:
+                                st.toast(f"{len(lista)} ASN(s) de {imp_stk_sel} confirmados en stock ✅", icon="🏢")
+                            st.cache_data.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+
+# MENÚ DISTRIBUCIÓN oculto (modo pantalla)
+
+# ----------------------------------------------------------
+# MENÚ: DASH DESPACHOS
+# ----------------------------------------------------------
+if menu == "📊 Dash Despachos":
+    render_dash_despachos()
+
+# ----------------------------------------------------------
+# MENÚ: INDICADORES DE ALMACÉN
+# ----------------------------------------------------------
+if menu == "📋 Indicadores de Almacén":
+    import plotly.graph_objects as go
+
+    # ── Título sección ─────────────────────────────────────────────────────
+    st.markdown("""
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+      <div style="background:linear-gradient(135deg,#1a7a4a,#2d9e6b);border-radius:10px;
+                  padding:10px 16px;">
+        <span style="color:#fff;font-size:24px;">📋</span>
+      </div>
+      <div>
+        <div style="font-size:28px;font-weight:900;color:#1a7a4a;">Indicadores de Almacén</div>
+        <div style="font-size:14px;color:#aaa;font-weight:500;">LA CARCASA MOVIL · Inventario Cíclico</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    df_carc = cargar_historial_carcasa()
+
+    if df_carc.empty:
+        st.warning("⚠️ Sin datos en el historial de Carcasas.")
+    else:
+        # ── Filtros ────────────────────────────────────────────────────────
+        import datetime as _dt
+        _min_fecha = df_carc["Fecha"].min().date() if "Fecha" in df_carc.columns and len(df_carc) > 0 else _dt.date.today()
+        _max_fecha = df_carc["Fecha"].max().date() if "Fecha" in df_carc.columns and len(df_carc) > 0 else _dt.date.today()
+
+        col_f1, col_f2, col_f3 = st.columns([2, 2, 1])
+        with col_f1:
+            fecha_ini = st.date_input("📅 Fecha inicio", value=_min_fecha,
+                                      min_value=_min_fecha, max_value=_max_fecha, key="ind_fini")
+        with col_f2:
+            fecha_fin = st.date_input("📅 Fecha fin", value=_max_fecha,
+                                      min_value=_min_fecha, max_value=_max_fecha, key="ind_ffin")
+        with col_f3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🔄 Actualizar", key="ind_refresh"):
+                st.cache_data.clear()
+                st.rerun()
+
+        # Aplicar filtro de rango de fechas
+        import pandas as _pd_f
+        df = df_carc.copy()
+        if "Fecha" in df.columns:
+            df = df[(df["Fecha"].dt.date >= fecha_ini) & (df["Fecha"].dt.date <= fecha_fin)]
+        mes_sel = f"{fecha_ini.strftime('%d/%m/%Y')} — {fecha_fin.strftime('%d/%m/%Y')}"
+
+        contados = df[df["Estado"] != "⏳ Pendiente"] if "Estado" in df.columns else df
+
+        # ── Calcular indicadores ───────────────────────────────────────────
+        ok_ubic       = (contados["Estado"] == "✅ OK").sum() if "Estado" in contados.columns else 0
+        total_contados= len(contados)
+        eru           = (ok_ubic / total_contados * 100) if total_contados > 0 else 0
+
+        eri = 0; skus_ok = 0; total_skus = 0
+        if "Código SKU" in contados.columns and "Contado" in contados.columns and len(contados) > 0:
+            por_sku = contados.groupby("Código SKU").agg(
+                total_contado=("Contado", "sum"),
+                total_wms=("Stock WMS", "sum"),
+            ).reset_index()
+            por_sku = por_sku[por_sku["total_wms"] > 0]
+            por_sku["eri_val"] = (1 - (por_sku["total_contado"] - por_sku["total_wms"]).abs() / por_sku["total_wms"]).clip(lower=0)
+            total_skus = len(por_sku)
+            skus_ok    = (por_sku["eri_val"] >= 0.95).sum()
+            eri        = por_sku["eri_val"].mean() * 100 if total_skus > 0 else 0
+
+        aj_pos = contados[contados["Diferencia"] > 0]["Diferencia"].sum() if "Diferencia" in contados.columns else 0
+        aj_neg = contados[contados["Diferencia"] < 0]["Diferencia"].sum() if "Diferencia" in contados.columns else 0
+
+        # ── KPIs — diseño tipo tarjeta con ícono ──────────────────────────
+        eru_color = "#2d9e6b" if eru >= 85 else ("#e8a020" if eru >= 60 else "#c0392b")
+        eri_color = "#2d9e6b" if eri >= 85 else ("#e8a020" if eri >= 60 else "#c0392b")
+
+        def _kpi2(col, icon, label, formula, value, sub, color, bg):
+            col.markdown(f"""
+            <div style="background:{bg};border-radius:14px;padding:18px 20px;
+                        border-left:5px solid {color};box-shadow:0 3px 12px rgba(0,0,0,0.07);
+                        min-height:130px;display:flex;flex-direction:column;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span style="font-size:22px;">{icon}</span>
+                <div>
+                  <div style="font-size:15px;font-weight:900;color:{color};text-transform:uppercase;
+                              letter-spacing:.6px;">{label}</div>
+                  <div style="font-size:11px;color:#aaa;">{formula}</div>
+                </div>
+              </div>
+              <div style="font-size:34px;font-weight:900;color:{color};line-height:1;">{value}</div>
+              <div style="font-size:12px;color:#888;margin-top:6px;padding-top:6px;
+                          border-top:1px solid rgba(0,0,0,0.06);">{sub}</div>
+            </div>""", unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        k1, k2, k3, k4 = st.columns(4)
+        _kpi2(k1, "✅", "ERI", "SKU correctos / Total auditados × 100",
+              f"{eri:.1f}%", f"{skus_ok} de {total_skus} SKUs ≥ 95%", eri_color, "#f0faf4")
+        _kpi2(k2, "📍", "ERU", "Ubicaciones correctas / Total auditadas × 100",
+              f"{eru:.1f}%", f"{ok_ubic} OK de {total_contados} contados", eru_color, "#f0faf4")
+        _kpi2(k3, "📈", "Ajustes Positivos", "Suma unidades sobrantes",
+              f"+{int(aj_pos):,}", "unidades contadas de más vs WMS", "#1a7a4a", "#f0faf4")
+        _kpi2(k4, "📉", "Ajustes Negativos", "Suma unidades faltantes",
+              f"{int(aj_neg):,}", "unidades contadas de menos vs WMS", "#c0392b", "#fff5f5")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Gráfico de estados ─────────────────────────────────────────────
+        if len(contados) > 0 and "Estado" in contados.columns:
+            st.markdown("""
+            <div style="font-size:14px;font-weight:700;color:#1a7a4a;
+                        margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #c8e06a;">
+              📊 Distribución de resultados
+            </div>""", unsafe_allow_html=True)
+
+            g1, g2 = st.columns([1, 2])
+
+            with g1:
+                # ERI evolutivo (línea)
+                if "Fecha" in contados.columns and "Código SKU" in contados.columns and len(contados) > 0:
+                    import pandas as _pd2
+                    _ev2 = []
+                    for _d, _grp in contados.groupby(contados["Fecha"].dt.date):
+                        _ps = _grp.groupby("Código SKU").agg(tc=("Contado","sum"),tw=("Stock WMS","sum")).reset_index()
+                        _ps = _ps[_ps["tw"]>0]
+                        _ps["e"] = (1-(_ps["tc"]-_ps["tw"]).abs()/_ps["tw"]).clip(lower=0)
+                        _ev2.append({"Fecha":_d,"ERI":round(_ps["e"].mean()*100,1) if len(_ps)>0 else 0})
+                    _df_eri = _pd2.DataFrame(_ev2)
+
+                    fig_eri_line = go.Figure()
+                    fig_eri_line.add_trace(go.Scatter(
+                        x=_df_eri["Fecha"], y=_df_eri["ERI"],
+                        mode="lines+markers+text",
+                        line=dict(color="#1a7a4a", width=2.5),
+                        marker=dict(color="#1a7a4a", size=7),
+                        text=_df_eri["ERI"].apply(lambda v: f"{v:.1f}%"),
+                        textposition="top center",
+                        textfont=dict(size=10, color="#1a7a4a"),
+                        hovertemplate="<b>%{x}</b><br>ERI: %{y:.1f}%<extra></extra>",
+                    ))
+                    fig_eri_line.update_layout(
+                        height=240,
+                        xaxis=dict(gridcolor="#e8f5ee", color="#888", title=""),
+                        yaxis=dict(title="ERI %", range=[0, 110], ticksuffix="%",
+                                   gridcolor="#e8f5ee", color="#888"),
+                        plot_bgcolor="white", paper_bgcolor="white",
+                        font=dict(family="Arial", size=11),
+                        showlegend=False,
+                        margin=dict(l=10, r=10, t=30, b=10),
+                    )
+                    st.plotly_chart(fig_eri_line, use_container_width=True, key="eri_linea")
+                else:
+                    st.info("Sin datos suficientes para ERI evolutivo.")
+
+            with g2:
+                # Evolución diaria si hay fechas
+                if "Fecha" in contados.columns:
+                    ev = contados.groupby(contados["Fecha"].dt.date).agg(
+                        Contados=("Estado", "count"),
+                        OK=("Estado", lambda x: (x == "✅ OK").sum()),
+                    ).reset_index()
+                    ev.columns = ["Fecha", "Contados", "OK"]
+                    ev["ERU %"] = (ev["OK"] / ev["Contados"] * 100).round(1)
+
+                    fig_ev = go.Figure()
+                    fig_ev.add_trace(go.Scatter(
+                        x=ev["Fecha"], y=ev["ERU %"],
+                        name="ERU %",
+                        mode="lines+markers+text",
+                        line=dict(color="#2d9e6b", width=2.5),
+                        marker=dict(color="#2d9e6b", size=7,
+                                    line=dict(color="#fff", width=1.5)),
+                        text=ev["ERU %"].apply(lambda v: f"{v:.1f}%"),
+                        textposition="top center",
+                        textfont=dict(size=10, color="#2d9e6b"),
+                        hovertemplate="<b>%{x}</b><br>ERU: %{y:.1f}%<extra></extra>",
+                    ))
+                    fig_ev.update_layout(
+                        height=240,
+                        xaxis=dict(gridcolor="#e8f5ee", color="#888", title="", showgrid=False),
+                        yaxis=dict(title="ERU %", range=[0, 110], ticksuffix="%",
+                                   gridcolor="#e8f5ee", color="#888"),
+                        plot_bgcolor="white", paper_bgcolor="white",
+                        font=dict(family="Arial", size=11),
+                        showlegend=False,
+                        margin=dict(l=10, r=10, t=30, b=10),
+                    )
+                    st.plotly_chart(fig_ev, use_container_width=True, key="evol_eru")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Top SKUs con ajuste ─────────────────────────────────────────────
+        st.markdown("""
+        <div style="font-size:14px;font-weight:700;color:#1a7a4a;
+                    margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #c8e06a;">
+          ⚠️ SKUs con mayor diferencia
+        </div>""", unsafe_allow_html=True)
+
+        if "Código SKU" in contados.columns and len(contados) > 0:
+            df_aj = contados[contados["Estado"].isin(["❌ Ajuste", "⚠ Revisar"])].copy()
+            if df_aj.empty:
+                st.success("✅ No hay SKUs con ajustes en el período seleccionado.")
+            else:
+                top_aj = df_aj.groupby(["Código SKU", "Descripción"]).agg(
+                    Total_WMS=("Stock WMS", "sum"),
+                    Total_contado=("Contado", "sum"),
+                    Diferencia_total=("Diferencia", "sum"),
+                    Veces=("Estado", "count"),
+                ).reset_index()
+                top_aj["ERI %"] = ((1 - top_aj["Diferencia_total"].abs() / top_aj["Total_WMS"].replace(0, 1)).clip(lower=0) * 100).round(1)
+                top_aj = top_aj.sort_values("Diferencia_total", key=abs, ascending=False).head(10)
+                top_aj.columns = ["Código SKU", "Descripción", "Stock WMS", "Contado", "Diferencia", "Veces ajuste", "ERI %"]
+                st.dataframe(
+                    top_aj, use_container_width=True, hide_index=True,
+                    column_config={
+                        "Stock WMS"   : st.column_config.NumberColumn(format="%d"),
+                        "Contado"     : st.column_config.NumberColumn(format="%d"),
+                        "Diferencia"  : st.column_config.NumberColumn(format="%+d"),
+                        "Veces ajuste": st.column_config.NumberColumn(format="%d"),
+                        "ERI %"       : st.column_config.NumberColumn(format="%.1f%%"),
+                    }
+                )
+
+        # ── BOTÓN PRESENTACIÓN INDICADORES ────────────────────────────────
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.divider()
+
+        _KEY_PPT = "ppt_indicadores"
+        _KEY_HTML = "ppt_indicadores_html"
+        if _KEY_PPT not in st.session_state:
+            st.session_state[_KEY_PPT] = False
+
+        _lbl = "⬇️ Cerrar presentación" if st.session_state[_KEY_PPT] else "🖥️ Ver presentación: Indicadores de Almacén"
+        if st.button(_lbl, key="btn_ppt_ind"):
+            st.session_state[_KEY_PPT] = not st.session_state[_KEY_PPT]
+            if st.session_state[_KEY_PPT]:
+                import plotly.io as _pio, json as _json
+
+                # Calcular ERI evolutivo
+                _eri_dates, _eri_vals = [], []
+                _eru_dates, _eru_vals = [], []
+                if "Fecha" in contados.columns and len(contados) > 0:
+                    _ev = contados.groupby(contados["Fecha"].dt.date).agg(
+                        Contados=("Estado","count"),
+                        OK=("Estado", lambda x: (x=="✅ OK").sum()),
+                    ).reset_index()
+                    _ev.columns = ["Fecha","Contados","OK"]
+                    _ev["ERU"] = (_ev["OK"]/_ev["Contados"]*100).round(1)
+                    _eru_dates = [str(d) for d in _ev["Fecha"]]
+                    _eru_vals  = _ev["ERU"].tolist()
+
+                if "Fecha" in contados.columns and "Código SKU" in contados.columns and len(contados) > 0:
+                    _ev2 = []
+                    for _d, _grp in contados.groupby(contados["Fecha"].dt.date):
+                        _ps = _grp.groupby("Código SKU").agg(tc=("Contado","sum"),tw=("Stock WMS","sum")).reset_index()
+                        _ps = _ps[_ps["tw"]>0]
+                        _ps["e"] = (1-(_ps["tc"]-_ps["tw"]).abs()/_ps["tw"]).clip(lower=0)
+                        _ev2.append({"d":str(_d),"e":round(_ps["e"].mean()*100,1) if len(_ps)>0 else 0})
+                    _eri_dates = [x["d"] for x in _ev2]
+                    _eri_vals  = [x["e"] for x in _ev2]
+
+                # Logos b64
+                _lc = _b64_img("CARCASAS.png")
+                _lcf= _b64_img("CARGOFLEX.png")
+                _img_c  = f'data:image/png;base64,{_lc}' if _lc else ""
+                _img_cf2= f'data:image/png;base64,{_lcf}' if _lcf else ""
+
+                # Colores semáforo
+                _ec = "#2d9e6b" if eri>=85 else ("#e8a020" if eri>=60 else "#c0392b")
+                _uc = "#2d9e6b" if eru>=85 else ("#e8a020" if eru>=60 else "#c0392b")
+
+                _html = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 <style>
-  html, body {{
-    margin: 0; padding: 0; width: 100%; height: 100vh;
-    background-color: #0b1e14; color: #ffffff;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    overflow: hidden;
-  }}
-  .header-container {{
-    height: 20vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    border-bottom: 2px solid #2d9e6b;
-    box-sizing: border-box;
-    background: linear-gradient(180deg, #102a1c 0%, #0b1e14 100%);
-  }}
-  .header-container h1 {{
-    margin: 0;
-    font-size: 2.5rem;
-    color: #85dcaa;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    text-shadow: 0px 4px 10px rgba(0,0,0,0.5);
-  }}
-  .header-container p {{
-    margin: 5px 0 0 0;
-    font-size: 1.1rem;
-    color: #c8e06a;
-    opacity: 0.9;
-  }}
-  .charts-container {{
-    height: 80vh;
-    display: flex;
-    flex-direction: row;
-    box-sizing: border-box;
-    padding: 15px;
-    gap: 15px;
-  }}
-  .chart-box {{
-    flex: 1;
-    height: 100%;
-    background-color: #102a1c;
-    border-radius: 12px;
-    border: 1px solid #1a7a4a;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    box-sizing: border-box;
-    padding: 10px;
-    position: relative;
-  }}
-  .fs-btn {{
-    position: absolute; bottom: 20px; right: 20px;
-    background-color: #2d9e6b; color: white; border: none;
-    padding: 10px 18px; font-weight: bold; border-radius: 6px;
-    cursor: pointer; z-index: 9999; font-size: 0.9rem;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    transition: background 0.2s;
-  }}
-  .fs-btn:hover {{ background-color: #3dbb7e; }}
+*{{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif;}}
+html,body{{width:100%;height:100%;background:#f0faf4;overflow:hidden;}}
+/* Layout: 3 tercios verticales — header / KPIs / gráficos */
+#wrap{{
+  width:100vw;height:100vh;display:flex;flex-direction:column;
+  padding:12px 20px 10px;gap:8px;background:#f4fbf7;
+  overflow:hidden;
+}}
+/* TERCIO 1 — HEADER ~28vh */
+#hdr{{
+  display:flex;align-items:center;justify-content:space-between;
+  background:#fff;border-radius:14px;padding:0 28px;
+  border-bottom:5px solid #c8e06a;
+  box-shadow:0 2px 12px rgba(26,122,74,0.1);
+  flex:0 0 calc(20vh - 12px);
+}}
+#hdr img{{height:60%;max-height:80px;object-fit:contain;}}
+#hdr-mid{{text-align:center;flex:1;padding:0 24px;}}
+#hdr-mid .title{{color:#1a7a4a;font-size:clamp(1.1rem,2.2vh,1.8rem);font-weight:900;letter-spacing:.2px;}}
+#hdr-mid .sub{{color:#aaa;font-size:clamp(10px,1.4vh,14px);font-weight:500;margin-top:4px;}}
+/* TERCIO 2 — KPIs ~28vh */
+#kpi-row{{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
+  flex:0 0 calc(20vh - 12px);
+}}
+.kpi-card{{
+  background:#fff;border-radius:14px;padding:clamp(10px,1.5vh,20px) clamp(12px,1.8vh,22px);
+  border-left:6px solid #2d9e6b;
+  box-shadow:0 3px 12px rgba(0,0,0,0.06);
+  display:flex;flex-direction:column;justify-content:space-between;
+  overflow:hidden;
+}}
+.kpi-top{{display:flex;align-items:center;gap:8px;}}
+.kpi-icon{{font-size:clamp(16px,2vh,22px);}}
+.kpi-name{{font-size:clamp(12px,1.6vh,17px);font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#888;}}
+.kpi-formula{{font-size:clamp(8px,1vh,10px);color:#ccc;margin-top:2px;}}
+.kpi-val{{font-size:clamp(30px,5vh,52px);font-weight:900;line-height:1;margin-top:4px;}}
+.kpi-sub{{font-size:clamp(9px,1.1vh,12px);color:#bbb;padding-top:5px;border-top:1px solid #f0f0f0;}}
+/* TERCIO 3 — GRÁFICOS ~44vh */
+#charts-row{{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;
+  flex:1 1 auto;min-height:0;
+}}
+.chart-card{{
+  background:#fff;border-radius:14px;padding:12px 18px 6px;
+  box-shadow:0 3px 12px rgba(0,0,0,0.06);
+  display:flex;flex-direction:column;border-top:3px solid #c8e06a;
+  overflow:hidden;
+}}
+.chart-title{{font-size:clamp(14px,2vh,20px);font-weight:900;color:#1a7a4a;margin-bottom:2px;flex-shrink:0;}}
+.chart-sub{{font-size:clamp(9px,1vh,11px);color:#bbb;margin-bottom:4px;flex-shrink:0;}}
+.chart-div{{flex:1;min-height:0;}}
+/* BTN FULLSCREEN */
+#fsb{{
+  position:fixed;bottom:14px;right:18px;
+  background:linear-gradient(135deg,#1a7a4a,#2d9e6b);
+  border:none;border-radius:10px;padding:8px 20px;
+  font-size:13px;font-weight:700;color:#fff;cursor:pointer;
+  box-shadow:0 4px 14px rgba(26,122,74,0.35);z-index:9999;
+}}
+#fsb:hover{{opacity:.9;}}
 </style>
 </head>
 <body>
-<div class="header-container">
-    <h1>📦 Sistema Logístico Carcasas</h1>
-    <p>Modo de Visualización en Pantalla de Control</p>
-</div>
-<div class="charts-container">
-  <div class="chart-box" id="chart-eri"></div>
-  <div class="chart-box" id="chart-eru"></div>
-</div>
-<button class="fs-btn" id="fsb" onclick="toggleFS()">⛶ Pantalla completa</button>
-<script>
-var eriDates = {fechas_js};
-var eriVals = {eri_js};
-var eruDates = {fechas_js};
-var eruVals = {eru_js};
+<div id="wrap">
 
-function mkChart(divId, dates, vals, lineColor, titleText) {{
-  var trace = {{
-    x: dates, y: vals, type: 'scatter', mode: 'lines+markers',
-    line: {{ color: lineColor, width: 4 }},
-    marker: {{ size: 10, color: '#e8d44d' }},
-    name: titleText
-  }};
-  Plotly.newPlot(divId, [trace], {{
-    title: {{ text: titleText, font: {{ color: '#ffffff', size: 22, family: 'sans-serif', weight: 'bold' }} }},
-    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
-    margin: {{ l: 50, r: 30, t: 60, b: 50 }},
+  <!-- HEADER -->
+  <div id="hdr">
+    <div>{"<img src='" + _img_c + "' />" if _img_c else ""}</div>
+    <div id="hdr-mid">
+      <div class="title">📋 Indicadores de Almacén — LA CARCASA MOVIL</div>
+      <div class="sub">Inventario Cíclico · Cargoflex Supply · {mes_sel}</div>
+    </div>
+    <div>{"<img src='" + _img_cf2 + "' />" if _img_cf2 else ""}</div>
+  </div>
+
+  <!-- KPI ROW -->
+  <div id="kpi-row">
+    <div class="kpi-card" style="border-left-color:{_ec};">
+      <div class="kpi-top">
+        <span class="kpi-icon">✅</span>
+        <div><div class="kpi-name">ERI — Exactitud Inventario</div>
+          <div class="kpi-formula">SKU correctos / Total auditados × 100</div></div>
+      </div>
+      <div class="kpi-val" style="color:{_ec};">{eri:.1f}%</div>
+      <div class="kpi-sub">{skus_ok} de {total_skus} SKUs ≥ 95%</div>
+    </div>
+    <div class="kpi-card" style="border-left-color:{_uc};">
+      <div class="kpi-top">
+        <span class="kpi-icon">📍</span>
+        <div><div class="kpi-name">ERU — Exactitud Ubicaciones</div>
+          <div class="kpi-formula">Ubicaciones correctas / Total auditadas × 100</div></div>
+      </div>
+      <div class="kpi-val" style="color:{_uc};">{eru:.1f}%</div>
+      <div class="kpi-sub">{ok_ubic} OK de {total_contados} contados</div>
+    </div>
+    <div class="kpi-card" style="border-left-color:#2d9e6b;">
+      <div class="kpi-top">
+        <span class="kpi-icon">📈</span>
+        <div><div class="kpi-name">Ajustes Positivos</div>
+          <div class="kpi-formula">Suma unidades sobrantes vs WMS</div></div>
+      </div>
+      <div class="kpi-val" style="color:#2d9e6b;">+{int(aj_pos):,}</div>
+      <div class="kpi-sub">unidades contadas de más</div>
+    </div>
+    <div class="kpi-card" style="border-left-color:#c0392b;background:#fff8f8;">
+      <div class="kpi-top">
+        <span class="kpi-icon">📉</span>
+        <div><div class="kpi-name">Ajustes Negativos</div>
+          <div class="kpi-formula">Suma unidades faltantes vs WMS</div></div>
+      </div>
+      <div class="kpi-val" style="color:#c0392b;">{int(aj_neg):,}</div>
+      <div class="kpi-sub">unidades contadas de menos</div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW -->
+  <div id="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">📊 ERI — Exactitud de Inventario por SKU</div>
+      <div class="chart-sub">Evolución diaria · SKU correctos / Total auditados × 100</div>
+      <div class="chart-div" id="chart-eri"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">📊 ERU — Exactitud de Registro de Ubicaciones</div>
+      <div class="chart-sub">Evolución diaria · Ubicaciones correctas / Total auditadas × 100</div>
+      <div class="chart-div" id="chart-eru"></div>
+    </div>
+  </div>
+
+</div>
+
+<button id="fsb" onclick="toggleFS()">⛶ Pantalla completa</button>
+
+<script>
+var eriDates = {_json.dumps(_eri_dates)};
+var eriVals  = {_json.dumps(_eri_vals)};
+var eruDates = {_json.dumps(_eru_dates)};
+var eruVals  = {_json.dumps(_eru_vals)};
+
+function mkChart(divId, dates, vals, color, label) {{
+  var el = document.getElementById(divId);
+  if (!el || !dates.length) return;
+  var W = el.clientWidth || 500;
+  var H = el.clientHeight || 220;
+  // Etiquetas solo en algunos puntos para no saturar
+  var textArr = vals.map(function(v,i) {{
+    return (i===0 || i===vals.length-1 || i%Math.max(1,Math.floor(vals.length/5))===0)
+      ? v.toFixed(1)+"%" : "";
+  }});
+  Plotly.newPlot(divId, [
+    {{
+      type: "scatter", mode: "lines+markers+text",
+      x: dates, y: vals,
+      name: label,
+      line: {{color: color, width: 3, shape:"spline", smoothing:0.4}},
+      marker: {{color: color, size: 7, symbol:"circle",
+               line:{{color:"#fff",width:1.5}}}},
+      text: textArr,
+      textposition: "top center",
+      textfont: {{size:11, color:color, family:"Segoe UI,Arial"}},
+      hovertemplate: "<b>%{{x}}</b><br>" + label + ": %{{y:.1f}}%<extra></extra>",
+      cliponaxis: false
+    }}
+  ], {{
+    autosize: false, width: W, height: H,
+    paper_bgcolor: "#ffffff", plot_bgcolor: "#fafffe",
+    margin: {{l:48,r:20,t:20,b:58}},
+    font: {{family:"Segoe UI,Arial", size:11, color:"#444"}},
     xaxis: {{
-      gridcolor: '#1a7a4a', tickcolor: '#1a7a4a',
-      tickfont: {{ color: '#ffffff', size: 14 }},
-      linecolor: '#1a7a4a'
+      showgrid:false, tickfont:{{size:10,color:"#888"}},
+      tickangle:-30, zeroline:false,
+      linecolor:"#e0e0e0", linewidth:1
     }},
     yaxis: {{
-      gridcolor: '#1a7a4a', tickcolor: '#1a7a4a',
-      tickfont: {{ color: '#ffffff', size: 14 }},
-      linecolor: '#1a7a4a', linewidth: 1
+      range:[Math.max(0,Math.min.apply(null,vals)-10), 105],
+      ticksuffix:"%", gridcolor:"#f0f7f4",
+      tickfont:{{size:10,color:"#888"}},
+      zeroline:false, linecolor:"#e0e0e0", linewidth:1
     }},
     shapes: [],
     annotations: []
-  }}, {{displayModeBar:false, responsive:true}});
+  }}, {{displayModeBar:false, responsive:false}});
 }}
 
 function renderCharts() {{
@@ -951,9 +2068,15 @@ setTimeout(renderCharts, 120);
 </script>
 </body>
 </html>"""
-        st.session_state[_KEY_HTML] = _html
-        st.rerun()
+                st.session_state[_KEY_HTML] = _html
+            st.rerun()
 
-    if st.session_state.get(_KEY_PPT) and _KEY_HTML in st.session_state:
-        import streamlit.components.v1 as _comp
-        _comp.html(st.session_state[_KEY_HTML], height=850, scrolling=False)
+        if st.session_state.get(_KEY_PPT) and _KEY_HTML in st.session_state:
+            import streamlit.components.v1 as _comp
+            _comp.html(st.session_state[_KEY_HTML], height=820, scrolling=False)
+
+# ----------------------------------------------------------
+# SINCRONIZAR
+# ----------------------------------------------------------
+if st.sidebar.button("🔄 Sincronizar Todo"):
+    st.cache_data.clear(); st.rerun()
