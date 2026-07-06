@@ -246,7 +246,7 @@ else:
         st.subheader("📋 Datos Detallados")
         st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
 
-    # 7. MODO PRESENTACIÓN (INYECTADO INTEGRAL EN UN SOLO CONTENEDOR HTML)
+   # 7. MODO PRESENTACIÓN (INYECTADO INTEGRAL EN UN SOLO CONTENEDOR HTML)
     else:
         if _KEY_HTML not in st.session_state or True:
             df_cron = df_filtrado.sort_values('Fecha', ascending=True)
@@ -407,7 +407,7 @@ setTimeout(renderCharts, 120);
 </script>
 </body>
 </html>"""
-                st.session_state[_KEY_HTML] = _html
+            st.session_state[_KEY_HTML] = _html
             st.rerun()
 
         if st.session_state.get(_KEY_PPT) and _KEY_HTML in st.session_state:
