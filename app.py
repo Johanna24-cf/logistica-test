@@ -1143,13 +1143,41 @@ if menu == "📦 Importaciones":
             df_ap2["FCH_DT"] = pd.to_datetime(df_ap2["FCH ESTIMADA"], dayfirst=True, errors="coerce")
             df_ap2 = df_ap2[df_ap2["FCH_DT"] >= datetime.now()].sort_values("FCH_DT").head(4)
             cards = "".join(_card_ap(str(r["TIENDA"]), str(r["DESCRIPCION"]), str(r.get("FCH ESTIMADA",""))) for _, r in df_ap2.iterrows())
+            # Logos b64
+            _lc_ap  = _b64_img("CARCASAS.png")
+            _lcf_ap = _b64_img("CARGOFLEX.png")
+            _img_c_ap  = f'<img src="data:image/png;base64,{_lc_ap}"  style="height:100%;max-height:70px;object-fit:contain;">' if _lc_ap  else ""
+            _img_cf_ap = f'<img src="data:image/png;base64,{_lcf_ap}" style="height:100%;max-height:70px;object-fit:contain;">' if _lcf_ap else ""
+
             apertura_slide = (
-                '<div style="width:100%;height:100%;padding:20px 28px 16px;background:linear-gradient(135deg,#f0faf4,#e8f5ee);'
-                'font-family:Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;gap:14px;overflow:hidden;">'
-                '<div style="font-size:11px;font-weight:700;color:#2d9e6b;text-transform:uppercase;letter-spacing:1.5px;flex-shrink:0;">'
-                '🏪 Próximas Aperturas de Tiendas</div>'
-                '<div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:16px;flex:1;min-height:0;">'
-                + cards + '</div></div>'
+                # Outer wrapper
+                '<div style="width:100vw;height:100vh;display:flex;flex-direction:column;'
+                'padding:14px 22px 12px;gap:10px;background:#f4fbf7;box-sizing:border-box;overflow:hidden;'
+                'font-family:Arial,sans-serif;">'
+
+                # Header — ~20vh compacto
+                + '<div style="display:flex;align-items:center;justify-content:space-between;'
+                  'background:#fff;border-radius:14px;padding:0 24px;'
+                  'border-bottom:4px solid #c8e06a;'
+                  'box-shadow:0 2px 12px rgba(26,122,74,0.1);'
+                  'flex:0 0 calc(20vh - 12px);">'
+                  + '<div>' + _img_c_ap + '</div>'
+                  + '<div style="text-align:center;">'
+                    '<div style="font-size:clamp(1.1rem,2.5vh,2rem);font-weight:900;color:#1a7a4a;">'
+                    '🏪 Próximas Aperturas de Tiendas</div>'
+                    '<div style="font-size:clamp(10px,1.3vh,14px);color:#aaa;margin-top:3px;">'
+                    'LA CARCASA MOVIL · Cargoflex Supply</div>'
+                    '</div>'
+                  + '<div>' + _img_cf_ap + '</div>'
+                  + '</div>'
+
+                # Cards grid — resto del espacio
+                + '<div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;'
+                  'gap:14px;flex:1;min-height:0;">'
+                + cards
+                + '</div>'
+
+                + '</div>'
             )
 
         # ══════════════════════════════════════════════════════
@@ -1312,41 +1340,53 @@ if menu == "📦 Importaciones":
                 + '</div>'
             )
 
+            # Logos b64
+            _lc_st  = _b64_img("CARCASAS.png")
+            _lcf_st = _b64_img("CARGOFLEX.png")
+            _img_c_st  = f'<img src="data:image/png;base64,{_lc_st}"  style="height:100%;max-height:70px;object-fit:contain;">' if _lc_st  else ""
+            _img_cf_st = f'<img src="data:image/png;base64,{_lcf_st}" style="height:100%;max-height:70px;object-fit:contain;">' if _lcf_st else ""
+
             status_slide = (
-                '<div style="width:100%;height:100%;background:#f4fbf7;display:flex;'
-                'flex-direction:column;padding:20px 28px 16px;gap:12px;box-sizing:border-box;'
+                '<div style="width:100vw;height:100vh;display:flex;flex-direction:column;'
+                'padding:14px 22px 12px;gap:10px;background:#f4fbf7;box-sizing:border-box;'
                 'font-family:Arial,sans-serif;overflow:hidden;">'
 
-                # Header — 1er tercio
+                # Header — ~20vh compacto con logos
                 + '<div style="display:flex;align-items:center;justify-content:space-between;'
-                  'background:#fff;border-radius:14px;padding:14px 24px;'
-                  'border-bottom:4px solid #c8e06a;flex-shrink:0;height:calc(28vh - 16px);">'
-                  '<div style="font-size:2rem;font-weight:900;color:#1a7a4a;">'
-                  '📋 Pipeline de Importaciones</div>'
-                  '<div style="text-align:right;">'
-                  '<div style="font-size:13px;color:#aaa;">Inventario Cíclico · Cargoflex Supply</div>'
-                  '</div></div>'
+                  'background:#fff;border-radius:14px;padding:0 24px;'
+                  'border-bottom:4px solid #c8e06a;'
+                  'box-shadow:0 2px 12px rgba(26,122,74,0.1);'
+                  'flex:0 0 calc(20vh - 12px);">'
+                  + '<div>' + _img_c_st + '</div>'
+                  + '<div style="text-align:center;">'
+                    '<div style="font-size:clamp(1.1rem,2.5vh,2rem);font-weight:900;color:#1a7a4a;">'
+                    '📊 Status Global Importaciones</div>'
+                    '<div style="font-size:clamp(10px,1.3vh,14px);color:#aaa;margin-top:3px;">'
+                    'LA CARCASA MOVIL · Cargoflex Supply</div>'
+                    '</div>'
+                  + '<div>' + _img_cf_st + '</div>'
+                  + '</div>'
 
-                # KPIs — 2do tercio
+                # KPIs — 2do tercio ~30vh
                 + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;'
-                  'flex-shrink:0;height:calc(28vh - 16px);">'
+                  'flex:0 0 calc(30vh - 12px);">'
                   '<div style="background:#fff;border-radius:14px;border-left:6px solid #2d9e6b;'
-                  'padding:clamp(10px,2vh,20px) 20px;display:flex;flex-direction:column;justify-content:space-between;">'
-                  '<div style="font-size:clamp(10px,1.4vh,14px);font-weight:800;text-transform:uppercase;'
+                  'padding:clamp(12px,2vh,22px) 20px;display:flex;flex-direction:column;justify-content:space-between;">'
+                  '<div style="font-size:clamp(10px,1.4vh,15px);font-weight:800;text-transform:uppercase;'
                   'letter-spacing:.6px;color:#888;">Total Importaciones</div>'
-                  '<div style="font-size:clamp(28px,5vh,52px);font-weight:900;color:#1a7a4a;line-height:1;">'+str(total_i)+'</div>'
+                  '<div style="font-size:clamp(32px,6vh,58px);font-weight:900;color:#1a7a4a;line-height:1;">'+str(total_i)+'</div>'
                   '<div style="font-size:clamp(10px,1.2vh,13px);color:#bbb;">importaciones totales</div></div>'
                   '<div style="background:#fff;border-radius:14px;border-left:6px solid #e8a020;'
-                  'padding:clamp(10px,2vh,20px) 20px;display:flex;flex-direction:column;justify-content:space-between;">'
-                  '<div style="font-size:clamp(10px,1.4vh,14px);font-weight:800;text-transform:uppercase;'
+                  'padding:clamp(12px,2vh,22px) 20px;display:flex;flex-direction:column;justify-content:space-between;">'
+                  '<div style="font-size:clamp(10px,1.4vh,15px);font-weight:800;text-transform:uppercase;'
                   'letter-spacing:.6px;color:#888;">Pendientes de Arribo</div>'
-                  '<div style="font-size:clamp(28px,5vh,52px);font-weight:900;color:#e8a020;line-height:1;">'+str(n_pend_i)+'</div>'
+                  '<div style="font-size:clamp(32px,6vh,58px);font-weight:900;color:#e8a020;line-height:1;">'+str(n_pend_i)+'</div>'
                   '<div style="font-size:clamp(10px,1.2vh,13px);color:#bbb;">'+str(n_pend_asn_i)+' ASNs pendientes</div></div>'
                   '<div style="background:#fff;border-radius:14px;border-left:6px solid #1D9E75;'
-                  'padding:clamp(10px,2vh,20px) 20px;display:flex;flex-direction:column;justify-content:space-between;background:#fff;">'
-                  '<div style="font-size:clamp(10px,1.4vh,14px);font-weight:800;text-transform:uppercase;'
+                  'padding:clamp(12px,2vh,22px) 20px;display:flex;flex-direction:column;justify-content:space-between;">'
+                  '<div style="font-size:clamp(10px,1.4vh,15px);font-weight:800;text-transform:uppercase;'
                   'letter-spacing:.6px;color:#888;">Arribados</div>'
-                  '<div style="font-size:clamp(28px,5vh,52px);font-weight:900;color:#1D9E75;line-height:1;">'+str(n_arr_i)+'</div>'
+                  '<div style="font-size:clamp(32px,6vh,58px);font-weight:900;color:#1D9E75;line-height:1;">'+str(n_arr_i)+'</div>'
                   '<div style="font-size:clamp(10px,1.2vh,13px);color:#bbb;">'+str(n_arr_asn_i)+' ASNs recibidos</div></div>'
                   '</div>'
 
@@ -1806,7 +1846,7 @@ html,body{{width:100%;height:100%;background:#f0faf4;overflow:hidden;}}
   background:#fff;border-radius:14px;padding:0 28px;
   border-bottom:5px solid #c8e06a;
   box-shadow:0 2px 12px rgba(26,122,74,0.1);
-  flex:0 0 calc(28vh - 16px);
+  flex:0 0 calc(20vh - 12px);
 }}
 #hdr img{{height:60%;max-height:80px;object-fit:contain;}}
 #hdr-mid{{text-align:center;flex:1;padding:0 24px;}}
@@ -1815,7 +1855,7 @@ html,body{{width:100%;height:100%;background:#f0faf4;overflow:hidden;}}
 /* TERCIO 2 — KPIs ~28vh */
 #kpi-row{{
   display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
-  flex:0 0 calc(28vh - 16px);
+  flex:0 0 calc(20vh - 12px);
 }}
 .kpi-card{{
   background:#fff;border-radius:14px;padding:clamp(10px,1.5vh,20px) clamp(12px,1.8vh,22px);
